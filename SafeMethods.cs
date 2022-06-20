@@ -106,7 +106,7 @@ namespace UsbPcapLib
     [DllImport("setupapi.dll", SetLastError = true)]
     internal static extern CONFIGRET CM_Locate_DevNodeA(
       ref uint pdnDevInst,
-      string pDeviceID,
+      string? pDeviceID,
       int ulFlags);
 
     [DllImport("setupapi.dll", SetLastError = true)]

@@ -21,9 +21,9 @@ namespace UsbPcapLib
     private ThreadData _data;
     private int _filterDeviceId;
 
-    public event EventHandler<HeaderEventArgs> HeaderRead;
+    public event EventHandler<HeaderEventArgs>? HeaderRead;
 
-    public event EventHandler<DataEventArgs> DataRead;
+    public event EventHandler<DataEventArgs>? DataRead;
 
     protected virtual void OnHeaderRead(pcap_hdr_t arg)
     {
@@ -149,7 +149,7 @@ namespace UsbPcapLib
       }
       finally
       {
-        data.ExitEvent.Set();
+        data.ExitEvent?.Set();
       }
     }
 
@@ -179,7 +179,7 @@ namespace UsbPcapLib
       }
     }
 
-    public void wait_for_exit_signal() => this._data.ExitEvent.WaitOne();
+    public void wait_for_exit_signal() => this._data.ExitEvent?.WaitOne();
 
     public unsafe IntPtr create_filter_read_handle(ThreadData data)
     {
@@ -366,7 +366,7 @@ namespace UsbPcapLib
       }
     }
 
-    private static unsafe string GetExternalHubName(IntPtr Hub, uint ConnectionIndex)
+    private static unsafe string? GetExternalHubName(IntPtr Hub, uint ConnectionIndex)
     {
       var num1 = (uint) sizeof (USB_NODE_CONNECTION_NAME);
       USB_NODE_CONNECTION_NAME nodeConnectionName;
@@ -469,13 +469,13 @@ label_23:
           switch (registryProperty)
           {
             case CONFIGRET.CR_SUCCESS:
-              var stringAnsi1 = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject());
+              var stringAnsi1 = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
               if (DriverName.StartsWith(stringAnsi1, StringComparison.OrdinalIgnoreCase))
               {
                 var length2 = (uint) numArray.Length;
                 if (SafeMethods.CM_Get_DevNode_Registry_Property(pdnDevInst1, 1U, out pulRegDataType, gcHandle.AddrOfPinnedObject(), ref length2, 0U) == CONFIGRET.CR_SUCCESS)
                 {
-                  var stringAnsi2 = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject());
+                  var stringAnsi2 = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
                   print_usbpcapcmd(Level, index, stringAnsi2, deviceAddress, parentAddress, 0U, 0U, output);
                   if (printAllChildren)
                   {
@@ -568,7 +568,7 @@ label_23:
           }
           if (registryProperty == CONFIGRET.CR_SUCCESS)
           {
-            var stringAnsi = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject());
+            var stringAnsi = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
             if (!string.IsNullOrEmpty(stringAnsi) && !stack.TryPeek<ushort>(out parentNode))
             {
                 parentNode = 0;
@@ -653,7 +653,7 @@ label_22:
         }
 
         var num4 = Marshal.OffsetOf<USB_NODE_CONNECTION_DRIVERKEY_NAME>("DriverKeyName");
-        return Marshal.PtrToStringUni(IntPtr.Add(num3, num4.ToInt32()));
+        return Marshal.PtrToStringUni(IntPtr.Add(num3, num4.ToInt32()))!;
       }
       finally
       {
@@ -661,7 +661,7 @@ label_22:
       }
     }
 
-    private static string get_usbpcap_filter_hub_symlink(string filter)
+    private static string? get_usbpcap_filter_hub_symlink(string filter)
     {
       var file = SafeMethods.CreateFile(filter, FileAccess.None, FileShare.None, IntPtr.Zero, FileMode.Open, FileAttributes.None, IntPtr.Zero);
       if (file == SafeMethods.INVALID_HANDLE_VALUE)
@@ -738,7 +738,7 @@ label_22:
         {
           var str = "USBPcap";
           var structure = Marshal.PtrToStructure<OBJDIR_INFORMATION>(num);
-          if (structure.ObjectName.ToString().StartsWith(str))
+          if (structure.ObjectName.ToString()?.StartsWith(str) ?? false)
           {
               usbpcapFilters.Add("\\\\.\\" + structure.ObjectName);
           }
