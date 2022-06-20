@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "USBPcapLib", "USBPcapLib.csproj", "{FA4C17BD-451A-4B73-966C-F52B46B49F65}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UsbPcapLib.TestHarness", "UsbPcapLib.TestHarness\UsbPcapLib.TestHarness.csproj", "{03CA2F54-CA4A-4A58-9B2C-3C1307A15DDD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FA4C17BD-451A-4B73-966C-F52B46B49F65}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FA4C17BD-451A-4B73-966C-F52B46B49F65}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FA4C17BD-451A-4B73-966C-F52B46B49F65}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FA4C17BD-451A-4B73-966C-F52B46B49F65}.Release|Any CPU.Build.0 = Release|Any CPU
+		{03CA2F54-CA4A-4A58-9B2C-3C1307A15DDD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{03CA2F54-CA4A-4A58-9B2C-3C1307A15DDD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{03CA2F54-CA4A-4A58-9B2C-3C1307A15DDD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{03CA2F54-CA4A-4A58-9B2C-3C1307A15DDD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
