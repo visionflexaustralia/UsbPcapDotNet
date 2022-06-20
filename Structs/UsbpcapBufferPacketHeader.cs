@@ -5,8 +5,9 @@
 // Assembly location: C:\Users\benp\Downloads\USBPcapLib.dll
 
 using System.Runtime.InteropServices;
+using UsbPcapLib.Enums;
 
-namespace USBPcapLib
+namespace UsbPcapLib.Structs
 {
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
   public struct UsbpcapBufferPacketHeader
@@ -22,10 +23,10 @@ namespace USBPcapLib
     public USBPCAP_TRANSFER_TYPE transfer;
     public uint dataLength;
 
-    public int EndpointNumber => endpoint & 15;
+    public int EndpointNumber => this.endpoint & 15;
 
-    public bool In => (endpoint & 128) == 128;
+    public bool In => (this.endpoint & 128) == 128;
 
-    public IRPDierction IrpDirection => (info & 1) == 0 ? IRPDierction.FDO_TO_PDO : IRPDierction.PDO_TO_FDO;
+    public IRPDierction IrpDirection => (this.info & 1) == 0 ? IRPDierction.FDO_TO_PDO : IRPDierction.PDO_TO_FDO;
   }
 }

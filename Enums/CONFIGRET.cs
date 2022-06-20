@@ -4,7 +4,7 @@
 // MVID: 5B561C15-9FD4-4B20-805D-197561BAD532
 // Assembly location: C:\Users\benp\Downloads\USBPcapLib.dll
 
-namespace USBPcapLib
+namespace UsbPcapLib.Enums
 {
   public enum CONFIGRET
   {

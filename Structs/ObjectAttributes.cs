@@ -6,7 +6,7 @@
 
 using System.Runtime.InteropServices;
 
-namespace USBPcapLib
+namespace UsbPcapLib.Structs
 {
   public struct ObjectAttributes : IDisposable
   {
@@ -19,35 +19,41 @@ namespace USBPcapLib
 
     public ObjectAttributes(string name, uint attrs)
     {
-      Length = 0;
-      RootDirectory = IntPtr.Zero;
-      objectName = IntPtr.Zero;
-      Attributes = attrs;
-      SecurityDescriptor = IntPtr.Zero;
-      SecurityQualityOfService = IntPtr.Zero;
-      Length = Marshal.SizeOf(this);
-      ObjectName = new UnicodeString(name);
+      this.Length = 0;
+      this.RootDirectory = IntPtr.Zero;
+      this.objectName = IntPtr.Zero;
+      this.Attributes = attrs;
+      this.SecurityDescriptor = IntPtr.Zero;
+      this.SecurityQualityOfService = IntPtr.Zero;
+      this.Length = Marshal.SizeOf(this);
+      this.ObjectName = new UnicodeString(name);
     }
 
     public UnicodeString ObjectName
     {
-      get => (UnicodeString) Marshal.PtrToStructure(objectName, typeof (UnicodeString));
+      get => (UnicodeString) Marshal.PtrToStructure(this.objectName, typeof (UnicodeString));
       set
       {
-        bool fDeleteOld = objectName != IntPtr.Zero;
+        var fDeleteOld = this.objectName != IntPtr.Zero;
         if (!fDeleteOld)
-          objectName = Marshal.AllocHGlobal(Marshal.SizeOf(value));
-        Marshal.StructureToPtr(value, objectName, fDeleteOld);
+        {
+            this.objectName = Marshal.AllocHGlobal(Marshal.SizeOf(value));
+        }
+
+        Marshal.StructureToPtr(value, this.objectName, fDeleteOld);
       }
     }
 
     public void Dispose()
     {
-      if (!(objectName != IntPtr.Zero))
-        return;
-      Marshal.DestroyStructure(objectName, typeof (UnicodeString));
-      Marshal.FreeHGlobal(objectName);
-      objectName = IntPtr.Zero;
+      if (!(this.objectName != IntPtr.Zero))
+      {
+          return;
+      }
+
+      Marshal.DestroyStructure(this.objectName, typeof (UnicodeString));
+      Marshal.FreeHGlobal(this.objectName);
+      this.objectName = IntPtr.Zero;
     }
   }
 }

@@ -1,0 +1,47 @@
+name: Upload Nuget Packages
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  publish:
+    name: Publish Nuget Packages
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        token: ${{ github.token }}
+
+    - uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: '6.0.x'
+
+    - uses: microsoft/setup-msbuild@v1.0.2
+
+    - name: Configure NuGet
+      run: dotnet nuget add source --username visionflexaustralia --password ${{ secrets.PACKAGE_KEY }} --store-password-in-clear-text --name visionflex-nuget "https://nuget.pkg.github.com/visionflexaustralia/index.json"
+
+    - name: Create NuGet Package
+      run: dotnet pack -c Release ./Services.sln
+
+    - name: Glob Match
+      uses: tj-actions/glob@v4
+      id: glob
+      with:
+       files: |
+        '**.nupkg'
+
+    - name: Upload Package
+      run: |
+       ls bin
+       ls bin/Release
+       dotnet nuget push "bin\Release\*.nupkg" --skip-duplicate --api-key ${{ secrets.GITHUB_TOKEN }} --source "visionflex-nuget"
+
+    - name: Upload Artifact
+      if: failure()
+      uses: actions/upload-artifact@v2.3.1
+      with:
+        path: '**.nupkg'

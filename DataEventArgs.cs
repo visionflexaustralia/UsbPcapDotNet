@@ -4,7 +4,9 @@
 // MVID: 5B561C15-9FD4-4B20-805D-197561BAD532
 // Assembly location: C:\Users\benp\Downloads\USBPcapLib.dll
 
-namespace USBPcapLib
+using UsbPcapLib.Structs;
+
+namespace UsbPcapLib
 {
   public class DataEventArgs : EventArgs
   {
@@ -12,20 +14,20 @@ namespace USBPcapLib
     private UsbpcapBufferPacketHeader _header;
     private byte[] _data;
 
-    public pcaprec_hdr_t Record => _record;
+    public pcaprec_hdr_t Record => this._record;
 
-    public UsbpcapBufferPacketHeader Header => _header;
+    public UsbpcapBufferPacketHeader Header => this._header;
 
-    public byte[] Data => _data;
+    public byte[] Data => this._data;
 
     public DataEventArgs(
       pcaprec_hdr_t record,
       UsbpcapBufferPacketHeader packetHeader,
       byte[] data)
     {
-      _record = record;
-      _header = packetHeader;
-      _data = data;
+      this._record = record;
+      this._header = packetHeader;
+      this._data = data;
     }
   }
 }

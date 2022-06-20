@@ -6,8 +6,13 @@
 
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using UsbPcapLib.Enums;
+using UsbPcapLib.Structs;
+using FileAccess = UsbPcapLib.Enums.FileAccess;
+using FileAttributes = UsbPcapLib.Enums.FileAttributes;
+using FileShare = UsbPcapLib.Enums.FileShare;
 
-namespace USBPcapLib
+namespace UsbPcapLib
 {
   internal class SafeMethods
   {

@@ -6,7 +6,7 @@
 
 using System.Runtime.InteropServices;
 
-namespace USBPcapLib
+namespace UsbPcapLib.Structs
 {
   [StructLayout(LayoutKind.Sequential, Pack = 1)]
   public struct USBPCAP_ADDRESS_FILTER

@@ -4,7 +4,9 @@
 // MVID: 5B561C15-9FD4-4B20-805D-197561BAD532
 // Assembly location: C:\Users\benp\Downloads\USBPcapLib.dll
 
-namespace USBPcapLib
+using UsbPcapLib.Structs;
+
+namespace UsbPcapLib
 {
   public class ThreadData
   {
@@ -16,5 +18,10 @@ namespace USBPcapLib
     public uint bufferlen = SafeMethods.DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
     public bool process = true;
     public bool pcapHeaderReadEver;
+
+    public ThreadData(string device)
+    {
+        this.device = device;
+    }
   }
 }

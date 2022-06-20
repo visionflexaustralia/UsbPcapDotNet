@@ -1,6 +1,6 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-using USBPcapLib;
+using UsbPcapLib;
 using UsbPcapLib.TestHarness;
 
 var filters = USBPcapClient.find_usbpcap_filters();
@@ -26,11 +26,11 @@ client.DataRead += (sender, eventArgs) =>
 {
     if (eventArgs.Data.Length > 100)
     {
-  //      Console.WriteLine($"DATA READ Device:'{eventArgs.Header.device}' in?:{eventArgs.Header.In} func:'{eventArgs.Header.function}' len: {eventArgs.Data.Length} ");
+        Console.WriteLine($"DATA READ Device:'{eventArgs.Header.device}' in?:{eventArgs.Header.In} func:'{eventArgs.Header.function}' len: {eventArgs.Data.Length} ");
     }
     else
     {
-//        Console.WriteLine($"DATA READ Device:'{eventArgs.Header.device}' in?:{eventArgs.Header.In} func:'{eventArgs.Header.function}' len: {eventArgs.Data.Length} data:{eventArgs.Data.ToHexString()}");
+        Console.WriteLine($"DATA READ Device:'{eventArgs.Header.device}' in?:{eventArgs.Header.In} func:'{eventArgs.Header.function}' len: {eventArgs.Data.Length} data:{eventArgs.Data.ToHexString()}");
     }
 
     if (eventArgs.Header.In && eventArgs.Data.Length > 0 && Utils.CompareBytes(eventArgs.Data, new byte[] {0x02, 0x01, 0x00, 0x00}, 4))

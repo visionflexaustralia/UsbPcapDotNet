@@ -6,7 +6,7 @@
 
 using System.Runtime.InteropServices;
 
-namespace USBPcapLib
+namespace UsbPcapLib.Structs
 {
   public struct UnicodeString : IDisposable
   {
@@ -16,17 +16,17 @@ namespace USBPcapLib
 
     public UnicodeString(string s)
     {
-      Length = (ushort) (s.Length * 2);
-      MaximumLength = (ushort) (Length + 2U);
-      buffer = Marshal.StringToHGlobalUni(s);
+      this.Length = (ushort) (s.Length * 2);
+      this.MaximumLength = (ushort) (this.Length + 2U);
+      this.buffer = Marshal.StringToHGlobalUni(s);
     }
 
     public void Dispose()
     {
-      Marshal.FreeHGlobal(buffer);
-      buffer = IntPtr.Zero;
+      Marshal.FreeHGlobal(this.buffer);
+      this.buffer = IntPtr.Zero;
     }
 
-    public override string ToString() => Marshal.PtrToStringUni(buffer);
+    public override string? ToString() => Marshal.PtrToStringUni(this.buffer);
   }
 }

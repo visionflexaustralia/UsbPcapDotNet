@@ -5,8 +5,9 @@
 // Assembly location: C:\Users\benp\Downloads\USBPcapLib.dll
 
 using System.Runtime.InteropServices;
+using UsbPcapLib.Enums;
 
-namespace USBPcapLib
+namespace UsbPcapLib.Structs
 {
   [StructLayout(LayoutKind.Explicit, Pack = 1)]
   public struct USB_NODE_INFORMATION

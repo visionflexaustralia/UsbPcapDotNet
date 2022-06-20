@@ -4,7 +4,7 @@
 // MVID: 5B561C15-9FD4-4B20-805D-197561BAD532
 // Assembly location: C:\Users\benp\Downloads\USBPcapLib.dll
 
-namespace USBPcapLib
+namespace UsbPcapLib.Structs
 {
   public struct USB_NODE_CONNECTION_DRIVERKEY_NAME
   {

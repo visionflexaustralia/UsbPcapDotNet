@@ -5,6 +5,11 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <RepositoryUrl>https://github.com/visionflexaustralia/UsbPcapLib/</RepositoryUrl>
+        <Authors>Visionflex</Authors>
+        <Company>Visionflex Australia</Company>
+        <PackageId>UsbPcapLib</PackageId>
+        <Version>0.1.0</Version>
     </PropertyGroup>
 
     <ItemGroup>

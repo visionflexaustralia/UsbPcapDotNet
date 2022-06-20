@@ -6,36 +6,45 @@
 
 using System.Runtime.InteropServices;
 
-namespace USBPcapLib
+namespace UsbPcapLib
 {
   internal static class HelperExtension
   {
-    public static bool TryPeek<T>(this Stack<T> stack, out T item)
+    public static bool TryPeek<T>(this Stack<T> stack, out T item) where T: struct
     {
-      item = default (T);
+      item = default;
       if (stack.Count == 0)
-        return false;
+      {
+          return false;
+      }
+
       item = stack.Peek();
       return true;
     }
 
-    public static bool TryPop<T>(this Stack<T> stack, out T item)
+    public static bool TryPop<T>(this Stack<T> stack, out T item) where T: struct
     {
-      item = default (T);
+      item = default;
       if (stack.Count == 0)
-        return false;
+      {
+          return false;
+      }
+
       item = stack.Pop();
       return true;
     }
 
     public static unsafe bool TryRead<T>(this BinaryReader br, out T value) where T : unmanaged
     {
-      int count = sizeof (T);
+      var count = sizeof (T);
       value = default (T);
-      byte[] numArray = br.ReadBytes(count);
+      var numArray = br.ReadBytes(count);
       if (numArray.Length == 0)
-        return false;
-      GCHandle gcHandle = GCHandle.Alloc(numArray, GCHandleType.Pinned);
+      {
+          return false;
+      }
+
+      var gcHandle = GCHandle.Alloc(numArray, GCHandleType.Pinned);
       try
       {
         value = Marshal.PtrToStructure<T>(gcHandle.AddrOfPinnedObject());
