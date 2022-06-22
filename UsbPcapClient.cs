@@ -891,7 +891,56 @@ namespace UsbPcapLib
         {
             SafeMethods.SetupDiDestroyDeviceInfoList(devs);
         }
+    }
 
+    public static unsafe void restart_device(
+        SafeFileHandle devs,
+        SP_DEVINFO_DATA devInfo,
+        SP_DEVINFO_LIST_DETAIL_DATA devInfoListDetail)
+    {
+        SP_PROPCHANGE_PARAMS pcp;
+        var devParams = new SP_DEVINSTALL_PARAMS();
+        TCHAR devID[MAX_DEVICE_ID_LEN];
+
+        if (SafeMethods.CM_Get_Device_ID_Ex(
+                devInfo.DevInst,
+                devID,
+                MAX_DEVICE_ID_LEN,
+                0,
+                devInfoListDetail.RemoteMachineHandle) != CONFIGRET.CR_SUCCESS)
+        {
+            devID[0] = '\0';
+        }
+        else
+        {
+
+        }
+
+        pcp.ClassInstallHeader.cbSize = sizeof(SP_CLASSINSTALL_HEADER);
+        pcp.ClassInstallHeader.InstallFunction = DIF_PROPERTYCHANGE;
+        pcp.StateChange = DICS_PROPCHANGE;
+        pcp.Scope = DICS_FLAG_CONFIGSPECIFIC;
+        pcp.HwProfile = 0;
+
+        if (!SafeMethods.SetupDiSetClassInstallParams(devs, devInfo, &pcp.ClassInstallHeader, sizeof(pcp)) ||
+            !SafeMethods.SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, devs, devInfo))
+        {
+            Console.WriteLine("Failed to invoke DIF_PROPERTYCHANGE! Please reboot.\n");
+        }
+        else
+        {
+            devParams.cbSize = sizeof(devParams);
+
+            if (SafeMethods.SetupDiGetDeviceInstallParams(devs,devInfo, ref devParams) &&
+                (devParams.Flags & (int)( SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDRESTART | SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDREBOOT)))
+            {
+                Console.WriteLine("Reboot required.\n");
+            }
+            else
+            {
+                Console.WriteLine("Restarted.\n");
+            }
+        }
     }
 
     public void Dispose()
@@ -908,5 +957,28 @@ namespace UsbPcapLib
 
       SafeMethods.CloseHandle(this._data.read_handle);
     }
+  }
+
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+  public struct SP_DEVINSTALL_PARAMS
+  {
+      public int cbSize;
+      public int Flags;
+      public int FlagsEx;
+      public readonly IntPtr hwndParent;
+      public readonly IntPtr InstallMsgHandler;
+      public readonly IntPtr InstallMsgHandlerContext;
+      public readonly IntPtr FileQueue;
+      public readonly IntPtr ClassInstallReserved;
+      public readonly UIntPtr Reserved;
+      [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+      public string DriverPath;
+  }
+
+  [Flags]
+  public enum SP_DEVINSTALL_PARAMS_FLAGS : int
+  {
+      DI_NEEDRESTART               = 0x00000080,
+      DI_NEEDREBOOT                = 0x00000100
   }
 }
