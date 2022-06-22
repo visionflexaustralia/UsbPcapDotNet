@@ -297,7 +297,7 @@ namespace UsbPcapLib
 
     static unsafe void EnumerateHub(string hub, USB_NODE_CONNECTION_INFORMATION? connection_info, uint level, StringBuilder output)
     {
-        var deviceName = "";
+        var deviceName = string.Empty;
 
         if (hub.StartsWith(@"\\??\"))
         {
@@ -847,6 +847,51 @@ namespace UsbPcapLib
         }
       }
       return usbpcapFilters;
+    }
+
+    public static unsafe void foreach_host_controller(
+        Action<SafeFileHandle, SP_DEVINFO_DATA, SP_DEVINFO_LIST_DETAIL_DATA> callback)
+    {
+        var devs = (SP_DEVINFO_DATA*)SafeMethods.INVALID_HANDLE_VALUE;
+        uint devIndex;
+        SP_DEVINFO_DATA devInfo = new SP_DEVINFO_DATA();
+        SP_DEVINFO_LIST_DETAIL_DATA devInfoListDetail = new SP_DEVINFO_LIST_DETAIL_DATA();
+
+        try
+        {
+            var DevInterfaceUsbHostControllerGuid = Guid.Parse("3ABF6F2D-71C4-462A-8A92-1E6861E6AF27");
+
+            devs = SafeMethods.SetupDiGetClassDevsEx(
+                DevInterfaceUsbHostControllerGuid,
+                null,
+                null,
+                DIGCF.DIGCF_DEVICEINTERFACE | DIGCF.DIGCF_PRESENT,
+                null,
+                null,
+                null);
+
+            if ((IntPtr)devs == SafeMethods.INVALID_HANDLE_VALUE)
+            {
+                throw new ApplicationException("SetupDiCreateDeviceInfoListEx Failed");
+            }
+
+            devInfoListDetail.cbSize = (uint)sizeof(SP_DEVINFO_LIST_DETAIL_DATA);
+            if (!SafeMethods.SetupDiGetDeviceInfoListDetail(devs, &devInfoListDetail))
+            {
+                throw new ApplicationException("SetupDiGetDeviceInfoListDetail Failed");
+            }
+
+            devInfo.cbSize = (uint)sizeof(SP_DEVINFO_DATA);
+            for (devIndex = 0; SafeMethods.SetupDiEnumDeviceInfo(devs, devIndex, ref devInfo); devIndex++)
+            {
+                callback(new SafeFileHandle((IntPtr)devs, true), devInfo, devInfoListDetail);
+            }
+        }
+        finally
+        {
+            SafeMethods.SetupDiDestroyDeviceInfoList(devs);
+        }
+
     }
 
     public void Dispose()

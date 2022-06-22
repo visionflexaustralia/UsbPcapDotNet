@@ -132,6 +132,21 @@ namespace UsbPcapLib
       uint DevInst,
       int ulFlags);
 
+    [DllImport("setupapi.dll",
+        SetLastError = true,
+        CharSet = CharSet.Unicode)]
+    public static extern unsafe SP_DEVINFO_DATA* SetupDiGetClassDevsEx(ref Guid
+            GuidClass,
+        [MarshalAs(UnmanagedType.LPWStr)]
+        string? Enumerator,
+        IntPtr? hParent,
+        DIGCF nFlags,
+        SP_DEVINFO_DATA* DeviceInfoSet,
+        [MarshalAs(UnmanagedType.LPWStr)]
+        string? MachineName,
+        IntPtr? Reserved);
+
+
     internal static int CTL_CODE(int deviceType, int function, int method, int access) => deviceType << 16 | access << 14 | function << 2 | method;
 
     internal static uint IOCTL_USBPCAP_SETUP_BUFFER => (uint) CTL_CODE(34, 2048, 0, 1);
@@ -151,5 +166,28 @@ namespace UsbPcapLib
     internal static uint IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME => (uint) CTL_CODE(34, 264, 0, 0);
 
     internal static uint IOCTL_USB_GET_NODE_CONNECTION_NAME => (uint) CTL_CODE(34, 261, 0, 0);
+
+    public static unsafe SP_DEVINFO_DATA* SetupDiGetClassDevsEx(Guid devInterfaceUsbHostControllerGuid, string? enumerator, IntPtr? hwndParent, DIGCF flags, SP_DEVINFO_DATA* deviceInfoSet, string? machineName, IntPtr? reserved)
+    {
+        return SetupDiGetClassDevsEx(
+            ref devInterfaceUsbHostControllerGuid,
+            enumerator,
+            hwndParent,
+            flags,
+            deviceInfoSet,
+            machineName,
+            reserved);
+    }
+
+    [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern unsafe bool SetupDiDestroyDeviceInfoList(SP_DEVINFO_DATA* devs);
+
+    [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern unsafe bool SetupDiGetDeviceInfoListDetail(
+        SP_DEVINFO_DATA* devs,
+        SP_DEVINFO_LIST_DETAIL_DATA* spDevinfoListDetailData);
+
+    [DllImport("setupapi.dll", SetLastError=true)]
+    public static extern unsafe bool SetupDiEnumDeviceInfo(SP_DEVINFO_DATA* DeviceInfoSet, uint MemberIndex, ref SP_DEVINFO_DATA DeviceInfoData);
   }
 }
