@@ -1,12 +1,10 @@
-﻿// Decompiled with JetBrains decompiler
-// Type: USBPcapLib.USBPcapClient
-// Assembly: USBPcapLib, Version=1.0.3.0, Culture=neutral, PublicKeyToken=null
-// MVID: 5B561C15-9FD4-4B20-805D-197561BAD532
-// Assembly location: C:\Users\benp\Downloads\USBPcapLib.dll
+﻿// Taken from https://github.com/stjeong/usbpcap/tree/master/windows/USBPcapLib
+// LICENSE: MIT
 
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
+using Microsoft.Win32.SafeHandles;
 using UsbPcapLib.Enums;
 using UsbPcapLib.Structs;
 using FileAccess = UsbPcapLib.Enums.FileAccess;
@@ -181,63 +179,69 @@ namespace UsbPcapLib
 
     public void wait_for_exit_signal() => this._data.ExitEvent?.WaitOne();
 
-    public unsafe IntPtr create_filter_read_handle(ThreadData data)
-    {
-      var file = SafeMethods.CreateFile(data.device, FileAccess.FILE_GENERIC_WRITE | FileAccess.FILE_READ_DATA | FileAccess.FILE_READ_EA | FileAccess.FILE_READ_ATTRIBUTES, FileShare.None, IntPtr.Zero, FileMode.Open, FileAttributes.Overlapped, IntPtr.Zero);
-      if (file == SafeMethods.INVALID_HANDLE_VALUE)
-      {
-        Console.WriteLine("Couldn't open device");
-        return IntPtr.Zero;
-      }
-      var flag = false;
-      try
-      {
-        var usbpcapIoctlSize = new USBPCAP_IOCTL_SIZE();
-        usbpcapIoctlSize.size = data.snaplen;
-        var nInBufferSize1 = (uint) sizeof (USBPCAP_IOCTL_SIZE);
-        var lpInBuffer1 = new IntPtr(&usbpcapIoctlSize);
-        uint lpBytesReturned;
-
-        flag = SafeMethods.DeviceIoControl(file, SafeMethods.IOCTL_USBPCAP_SET_SNAPLEN_SIZE, lpInBuffer1, nInBufferSize1, IntPtr.Zero, 0U, out lpBytesReturned, IntPtr.Zero);
-        if (!flag)
+        public unsafe IntPtr create_filter_read_handle(ThreadData data)
         {
-          Console.WriteLine("DeviceIoControl failed (supplimentary code {0})", lpBytesReturned);
-          return IntPtr.Zero;
+            var filter_handle = SafeMethods.CreateFile(data.device, FileAccess.FILE_GENERIC_READ | FileAccess.FILE_GENERIC_WRITE, FileShare.None, IntPtr.Zero, FileMode.Open,
+                FileAttributes.Overlapped, IntPtr.Zero);
+
+            if (filter_handle == SafeMethods.INVALID_HANDLE_VALUE)
+            {
+                Console.WriteLine("Couldn't open device");
+                return IntPtr.Zero;
+            }
+
+            var safeFilterHandle = new SafeFileHandle(filter_handle, true);
+
+            var success = false;
+
+            try
+            {
+                var ioctlSize = new USBPCAP_IOCTL_SIZE();
+                ioctlSize.size = data.snaplen;
+                var inBufSize = (uint)sizeof(USBPCAP_IOCTL_SIZE);
+
+                var pBuf = &ioctlSize;
+
+                var nativeOverlapped = new NativeOverlapped();
+                success = SafeMethods.DeviceIoControl(safeFilterHandle, SafeMethods.IOCTL_USBPCAP_SET_SNAPLEN_SIZE, (IntPtr)pBuf, inBufSize, IntPtr.Zero, 0, out var bytes_ret, ref nativeOverlapped);
+                if (success == false)
+                {
+                    Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                    return IntPtr.Zero;
+                }
+
+                nativeOverlapped = new NativeOverlapped();
+                ioctlSize.size = data.bufferlen;
+                success = SafeMethods.DeviceIoControl(safeFilterHandle, SafeMethods.IOCTL_USBPCAP_SETUP_BUFFER, (IntPtr)pBuf, inBufSize, IntPtr.Zero, 0, out bytes_ret, ref nativeOverlapped);
+                if (success == false)
+                {
+                    Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                    return IntPtr.Zero;
+                }
+
+                nativeOverlapped = new NativeOverlapped();
+                fixed (USBPCAP_ADDRESS_FILTER* pFilter = &(data.filter))
+                {
+                    inBufSize = (uint)sizeof(USBPCAP_ADDRESS_FILTER);
+                    success = SafeMethods.DeviceIoControl(safeFilterHandle, SafeMethods.IOCTL_USBPCAP_START_FILTERING, (IntPtr)pFilter, inBufSize, IntPtr.Zero, 0, out bytes_ret, ref nativeOverlapped);
+                }
+
+                if (success == false)
+                {
+                    Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                    return IntPtr.Zero;
+                }
+
+                return filter_handle;
+            }
+            finally
+            {
+                if (success == false)
+                {
+                    SafeMethods.CloseHandle(filter_handle);
+                }
+            }
         }
-        usbpcapIoctlSize.size = data.bufferlen;
-
-        flag = SafeMethods.DeviceIoControl(file, SafeMethods.IOCTL_USBPCAP_SETUP_BUFFER, lpInBuffer1, nInBufferSize1, IntPtr.Zero, 0U, out lpBytesReturned, IntPtr.Zero);
-        if (!flag)
-        {
-          Console.WriteLine("DeviceIoControl failed (supplimentary code {0})", lpBytesReturned);
-          return IntPtr.Zero;
-        }
-
-
-        fixed (USBPCAP_ADDRESS_FILTER* usbpcapAddressFilterPtr = &data.filter)
-        {
-          var nInBufferSize2 = (uint) sizeof (USBPCAP_ADDRESS_FILTER);
-          var lpInBuffer2 = new IntPtr(usbpcapAddressFilterPtr);
-          flag = SafeMethods.DeviceIoControl(file, SafeMethods.IOCTL_USBPCAP_START_FILTERING, lpInBuffer2, nInBufferSize2, IntPtr.Zero, 0U, out lpBytesReturned, IntPtr.Zero);
-        }
-
-
-        if (flag)
-        {
-            return file;
-        }
-
-        Console.WriteLine("DeviceIoControl failed (supplimentary code {0})", lpBytesReturned);
-        return IntPtr.Zero;
-      }
-      finally
-      {
-        if (!flag)
-        {
-            SafeMethods.CloseHandle(file);
-        }
-      }
-    }
 
     public bool USBPcapInitAddressFilter(out USBPCAP_ADDRESS_FILTER filter, int filterDeviceId) => this.USBPcapSetDeviceFiltered(out filter, filterDeviceId);
 
@@ -291,49 +295,71 @@ namespace UsbPcapLib
       return output.ToString();
     }
 
-    private static unsafe void EnumerateHub(
-      string hub,
-      USB_NODE_CONNECTION_INFORMATION? connection_info,
-      uint level,
-      StringBuilder output)
+    static unsafe void EnumerateHub(string hub, USB_NODE_CONNECTION_INFORMATION? connection_info, uint level, StringBuilder output)
     {
-      var filename = !hub.StartsWith("\\\\??\\") ? (hub[0] != '\\' ? "\\\\.\\" + hub : hub) : "\\\\.\\" + hub.Substring(4);
-      var file = SafeMethods.CreateFile(filename, FileAccess.GenericWrite, FileShare.Write, IntPtr.Zero, FileMode.Open, FileAttributes.None, IntPtr.Zero);
-      if (file == SafeMethods.INVALID_HANDLE_VALUE)
-      {
-          return;
-      }
+        var deviceName = "";
 
-      var num1 = IntPtr.Zero;
-      try
-      {
-        if (file == SafeMethods.INVALID_HANDLE_VALUE)
+        if (hub.StartsWith(@"\\??\"))
         {
-            output.AppendLine("Couldn't open " + filename);
+            deviceName = @"\\.\" + hub[4..];
+        }
+        else if (hub[0] == '\\')
+        {
+            deviceName = hub;
+        }
+        else
+        {
+            deviceName = @"\\.\" + hub;
         }
 
-        var num2 = sizeof (USB_NODE_INFORMATION);
-        num1 = Marshal.AllocHGlobal(num2);
-        if (!SafeMethods.DeviceIoControl(file, SafeMethods.IOCTL_USB_GET_NODE_INFORMATION, num1, (uint) num2, num1, (uint) num2, out var _, IntPtr.Zero))
+        var hHubDevice = SafeMethods.CreateFile(deviceName, FileAccess.GenericWrite, FileShare.Write, IntPtr.Zero, FileMode.Open, FileAttributes.None, IntPtr.Zero);
+        var safeFileHandle = new SafeFileHandle(hHubDevice, true);
+
+        if (hHubDevice == SafeMethods.INVALID_HANDLE_VALUE)
         {
             return;
         }
 
-        var structure = Marshal.PtrToStructure<USB_NODE_INFORMATION>(num1);
-        EnumerateHubPorts(file, structure.HubInformation.HubDescriptor.bNumberOfPorts, level, !connection_info.HasValue ? (ushort) 0 : connection_info.Value.DeviceAddress, output);
-      }
-      finally
-      {
-        SafeMethods.CloseHandle(file);
-        if (num1 != IntPtr.Zero)
+        var pHubInfo = IntPtr.Zero;
+
+        try
         {
-            Marshal.FreeHGlobal(num1);
+            if (hHubDevice == SafeMethods.INVALID_HANDLE_VALUE)
+            {
+                output.AppendLine("Couldn't open " + deviceName);
+            }
+
+
+            var hubInfoSize = sizeof(USB_NODE_INFORMATION);
+            pHubInfo = Marshal.AllocHGlobal(hubInfoSize);
+
+            var overlap = new NativeOverlapped();
+            var success = SafeMethods.DeviceIoControl(safeFileHandle,
+                          SafeMethods.IOCTL_USB_GET_NODE_INFORMATION,
+                          pHubInfo, (uint)hubInfoSize, pHubInfo, (uint)hubInfoSize, out var nBytes, ref overlap);
+            if (success == false)
+            {
+                return;
+            }
+
+            var hubInfo = Marshal.PtrToStructure<USB_NODE_INFORMATION>(pHubInfo);
+
+            EnumerateHubPorts(safeFileHandle, hubInfo.HubInformation.HubDescriptor.bNumberOfPorts, level,
+                connection_info.HasValue == false ? (ushort)0 : connection_info.Value.DeviceAddress, output);
         }
-      }
+        finally
+        {
+            SafeMethods.CloseHandle(hHubDevice);
+
+            if (pHubInfo != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(pHubInfo);
+            }
+        }
     }
 
     private static unsafe void EnumerateHubPorts(
-      IntPtr hHubDevice,
+      SafeFileHandle hHubDevice,
       byte NumPorts,
       uint level,
       ushort hubAddress,
@@ -341,11 +367,12 @@ namespace UsbPcapLib
     {
       for (uint index = 1; index <= NumPorts; ++index)
       {
-        var num1 = (uint) sizeof (USB_NODE_CONNECTION_INFORMATION);
+        var inBufferSize = (uint) sizeof (USB_NODE_CONNECTION_INFORMATION);
         USB_NODE_CONNECTION_INFORMATION connectionInformation;
         connectionInformation.ConnectionIndex = index;
-        var num2 = new IntPtr(&connectionInformation);
-        if (SafeMethods.DeviceIoControl(hHubDevice, SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_INFORMATION, num2, num1, num2, num1, out var _, IntPtr.Zero) && connectionInformation.ConnectionStatus != USB_CONNECTION_STATUS.NoDeviceConnected)
+        var buffer = new IntPtr(&connectionInformation);
+        var overlap = new NativeOverlapped();
+        if (SafeMethods.DeviceIoControl(hHubDevice, SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_INFORMATION, buffer, inBufferSize, buffer, inBufferSize, out _, ref overlap) && connectionInformation.ConnectionStatus != USB_CONNECTION_STATUS.NoDeviceConnected)
         {
           var driverKeyName = GetDriverKeyName(hHubDevice, index);
           if (!string.IsNullOrEmpty(driverKeyName))
@@ -366,39 +393,59 @@ namespace UsbPcapLib
       }
     }
 
-    private static unsafe string? GetExternalHubName(IntPtr Hub, uint ConnectionIndex)
+    static unsafe string GetExternalHubName(SafeFileHandle Hub, uint ConnectionIndex)
     {
-      var num1 = (uint) sizeof (USB_NODE_CONNECTION_NAME);
-      USB_NODE_CONNECTION_NAME nodeConnectionName;
-      nodeConnectionName.ConnectionIndex = ConnectionIndex;
-      var num2 = new IntPtr(&nodeConnectionName);
-      if (!SafeMethods.DeviceIoControl(Hub, SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_NAME, num2, num1, num2, num1, out var _, IntPtr.Zero))
-      {
-          return string.Empty;
-      }
+        uint nBytes;
+        USB_NODE_CONNECTION_NAME extHubName;
+        var nameSize = (uint)sizeof(USB_NODE_CONNECTION_NAME);
 
-      var lpBytesReturned = nodeConnectionName.ActualLength;
-      if (lpBytesReturned <= num1)
-      {
-          return string.Empty;
-      }
+        // Get the length of the name of the external hub attached to the
+        // specified port.
+        extHubName.ConnectionIndex = ConnectionIndex;
 
-      var num3 = Marshal.AllocHGlobal((int) lpBytesReturned);
-      try
-      {
-        Marshal.WriteInt32(num3, (int) ConnectionIndex);
-        if (!SafeMethods.DeviceIoControl(Hub, SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_NAME, num3, lpBytesReturned, num3, lpBytesReturned, out lpBytesReturned, IntPtr.Zero))
+        var pInfo = &extHubName;
+        var ptrBuf = new IntPtr(pInfo);
+
+        var overlap = new NativeOverlapped();
+        var success = SafeMethods.DeviceIoControl(Hub, SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_NAME,
+            ptrBuf, nameSize, ptrBuf, nameSize, out nBytes, ref overlap);
+        if (success == false)
         {
             return string.Empty;
         }
 
-        var num4 = Marshal.OffsetOf<USB_NODE_CONNECTION_NAME>("NodeName");
-        return Marshal.PtrToStringUni(IntPtr.Add(num3, num4.ToInt32()));
-      }
-      finally
-      {
-        Marshal.FreeHGlobal(num3);
-      }
+        // Allocate space to hold the external hub name
+        nBytes = extHubName.ActualLength;
+
+        if (nBytes <= nameSize)
+        {
+            return string.Empty;
+        }
+
+        var extHubNameW = Marshal.AllocHGlobal((int)nBytes);
+
+        try
+        {
+            Marshal.WriteInt32(extHubNameW, (int)ConnectionIndex);
+            // Get the name of the external hub attached to the specified port
+
+            overlap = new NativeOverlapped();
+            success = SafeMethods.DeviceIoControl(Hub, SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_NAME,
+                extHubNameW, nBytes, extHubNameW, nBytes, out nBytes, ref overlap);
+
+            if (!success)
+            {
+                return string.Empty;
+            }
+
+            // Convert the External Hub name
+            var offset = Marshal.OffsetOf<USB_NODE_CONNECTION_NAME>(nameof(extHubName.NodeName));
+            return Marshal.PtrToStringUni(IntPtr.Add(extHubNameW, offset.ToInt32()))!;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(extHubNameW);
+        }
     }
 
     private static void print_usbpcapcmd(
@@ -433,206 +480,246 @@ namespace UsbPcapLib
       }
     }
 
-    private static void PrintDeviceDesc(
-      string DriverName,
-      uint index,
-      uint Level,
-      bool printAllChildren,
-      ushort deviceAddress,
-      ushort parentAddress,
-      StringBuilder output)
+    static void PrintDeviceDesc(string DriverName, uint index, uint Level, bool printAllChildren, ushort deviceAddress, ushort parentAddress, StringBuilder output)
     {
-      uint pdnDevInst1 = 0;
-      uint pdnDevInst2 = 0;
-      if (SafeMethods.CM_Locate_DevNodeA(ref pdnDevInst1, null, 0) != CONFIGRET.CR_SUCCESS)
-      {
-          return;
-      }
+        uint devInst = 0;
+        uint devInstNext = 0;
 
-      uint num1 = 0;
-      uint num2 = 0;
-label_23:
-      while (num2 == 0U)
-      {
-        if (++num1 > SafeMethods.LOOP_SANITY_LIMIT)
+        var cr = SafeMethods.CM_Locate_DevNodeA(ref devInst, null, 0);
+        if (cr != CONFIGRET.CR_SUCCESS)
         {
-          output.AppendLine("Sanity check failed in PrintDeviceDesc() outer loop!");
-          break;
+            return;
         }
-        var numArray = new byte[(int) SafeMethods.MAX_DEVICE_ID_LEN];
-        var gcHandle = GCHandle.Alloc(numArray, GCHandleType.Pinned);
-        var length1 = (uint) numArray.Length;
-        try
-        {
-          RegistryValueKind pulRegDataType;
-          var registryProperty = SafeMethods.CM_Get_DevNode_Registry_Property(pdnDevInst1, 10U, out pulRegDataType, gcHandle.AddrOfPinnedObject(), ref length1, 0U);
-          switch (registryProperty)
-          {
-            case CONFIGRET.CR_SUCCESS:
-              var stringAnsi1 = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
-              if (DriverName.StartsWith(stringAnsi1, StringComparison.OrdinalIgnoreCase))
-              {
-                var length2 = (uint) numArray.Length;
-                if (SafeMethods.CM_Get_DevNode_Registry_Property(pdnDevInst1, 1U, out pulRegDataType, gcHandle.AddrOfPinnedObject(), ref length2, 0U) == CONFIGRET.CR_SUCCESS)
-                {
-                  var stringAnsi2 = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
-                  print_usbpcapcmd(Level, index, stringAnsi2, deviceAddress, parentAddress, 0U, 0U, output);
-                  if (printAllChildren)
-                  {
-                    PrintDevinstChildren(pdnDevInst1, Level, deviceAddress, output);
-                  }
-                }
-              }
 
-              goto case CONFIGRET.CR_NO_SUCH_VALUE;
-            case CONFIGRET.CR_NO_SUCH_VALUE:
-              if (SafeMethods.CM_Get_Child(ref pdnDevInst2, pdnDevInst1, 0) == CONFIGRET.CR_SUCCESS)
-              {
-                pdnDevInst1 = pdnDevInst2;
-                continue;
-              }
-              uint num3 = 0;
-              while (++num3 <= SafeMethods.LOOP_SANITY_LIMIT)
-              {
-                var sibling = SafeMethods.CM_Get_Sibling(ref pdnDevInst2, pdnDevInst1, 0);
-                switch (sibling)
-                {
-                  case CONFIGRET.CR_SUCCESS:
-                    pdnDevInst1 = pdnDevInst2;
-                    goto label_23;
-                  case CONFIGRET.CR_NO_SUCH_DEVNODE:
-                    if (SafeMethods.CM_Get_Parent(out pdnDevInst2, pdnDevInst1, 0) == CONFIGRET.CR_SUCCESS)
-                    {
-                      pdnDevInst1 = pdnDevInst2;
-                      continue;
-                    }
-                    num2 = 1U;
-                    goto label_23;
-                  default:
-                    output.AppendLine(string.Format("CM_Get_Sibling() returned {0}", sibling));
-                    return;
-                }
-              }
-              output.AppendLine("Sanity check failed in PrintDeviceDesc() inner loop!");
-              return;
-            default:
-              output.AppendLine(string.Format("Failed to get CM_DRP_DRIVER: {0}", registryProperty));
-              return;
-          }
-        }
-        finally
-        {
-          gcHandle.Free();
-        }
-      }
-    }
+        uint sanityOuter = 0;
+        uint sanityInner = 0;
 
-    private static void PrintDevinstChildren(
-      uint parent,
-      uint indent,
-      ushort deviceAddress,
-      StringBuilder output)
-    {
-      uint pdnDevInst = 0;
-      var num1 = parent;
-      var level = indent;
-      var stack = new Stack<ushort>();
-      ushort parentNode = 0;
-      uint num2 = 0;
-      ushort node = 1;
-      if (SafeMethods.CM_Get_Child(ref pdnDevInst, num1, 0) == CONFIGRET.CR_SUCCESS)
-      {
-        num1 = pdnDevInst;
-        ++level;
-        stack.Push(parentNode);
-      }
-label_23:
-      while (level > indent)
-      {
-        if (++num2 > SafeMethods.LOOP_SANITY_LIMIT)
+        uint walkDone = 0;
+        while (walkDone == 0)
         {
-          output.AppendLine("Sanity check failed in PrintDevinstChildren()");
-          break;
-        }
-        var numArray = new byte[(int) SafeMethods.MAX_DEVICE_ID_LEN];
-        var gcHandle = GCHandle.Alloc(numArray, GCHandleType.Pinned);
-        var length = (uint) numArray.Length;
-        try
-        {
-          RegistryValueKind pulRegDataType;
-          var registryProperty = SafeMethods.CM_Get_DevNode_Registry_Property(num1, 13U, out pulRegDataType, gcHandle.AddrOfPinnedObject(), ref length, 0U);
-          if (registryProperty != CONFIGRET.CR_SUCCESS)
-          {
-            length = (uint) numArray.Length;
-            registryProperty = SafeMethods.CM_Get_DevNode_Registry_Property(num1, 1U, out pulRegDataType, gcHandle.AddrOfPinnedObject(), ref length, 0U);
-          }
-          if (registryProperty == CONFIGRET.CR_SUCCESS)
-          {
-            var stringAnsi = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
-            if (!string.IsNullOrEmpty(stringAnsi) && !stack.TryPeek<ushort>(out parentNode))
+            if ((++sanityOuter) > SafeMethods.LOOP_SANITY_LIMIT)
             {
-                parentNode = 0;
+                output.AppendLine("Sanity check failed in PrintDeviceDesc() outer loop!");
+                return;
             }
 
-            print_usbpcapcmd(level, 0U, stringAnsi, deviceAddress, deviceAddress, node, parentNode, output);
-          }
-          if (SafeMethods.CM_Get_Child(ref pdnDevInst, num1, 0) == CONFIGRET.CR_SUCCESS)
-          {
-            num1 = pdnDevInst;
-            ++level;
-            stack.Push(node);
-            ++node;
-            continue;
-          }
+            var buf = new byte[SafeMethods.MAX_DEVICE_ID_LEN];
+            var gcHandle = GCHandle.Alloc(buf, GCHandleType.Pinned);
+            var len = (uint)buf.Length;
+            try
+            {
+                cr = SafeMethods.CM_Get_DevNode_Registry_Property(devInst, (uint)CM_DRP.CM_DRP_DRIVER, out _, gcHandle.AddrOfPinnedObject(),
+                    ref len, 0);
+                if (cr == CONFIGRET.CR_SUCCESS)
+                {
+                    var devNodeName = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
+                    if (DriverName.StartsWith(devNodeName, StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        len = (uint)buf.Length;
+                        cr = SafeMethods.CM_Get_DevNode_Registry_Property(devInst, (uint)CM_DRP.CM_DRP_DEVICEDESC, out _, gcHandle.AddrOfPinnedObject(),
+                            ref len, 0);
+
+                        if (cr == CONFIGRET.CR_SUCCESS)
+                        {
+                            var deviceDesc = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
+
+                            print_usbpcapcmd(Level, index, deviceDesc, deviceAddress, parentAddress, 0, 0, output);
+
+                            if (printAllChildren == true)
+                            {
+                                PrintDevinstChildren(devInst, Level, deviceAddress, output);
+                            }
+                        }
+                    }
+                }
+                else if (cr == CONFIGRET.CR_NO_SUCH_VALUE)
+                {
+                    // No Driver name, it's ok
+                }
+                else
+                {
+                    output.AppendLine($"Failed to get CM_DRP_DRIVER: {cr}");
+                    return;
+                }
+
+                cr = SafeMethods.CM_Get_Child(ref devInstNext, devInst, 0);
+                if (cr == CONFIGRET.CR_SUCCESS)
+                {
+                    devInst = devInstNext;
+                    continue;
+                }
+
+                sanityInner = 0;
+
+                while (true)
+                {
+                    if ((++sanityInner) > SafeMethods.LOOP_SANITY_LIMIT)
+                    {
+                        output.AppendLine("Sanity check failed in PrintDeviceDesc() inner loop!");
+                        return;
+                    }
+
+                    cr = SafeMethods.CM_Get_Sibling(ref devInstNext, devInst, 0);
+
+                    if (cr == CONFIGRET.CR_SUCCESS)
+                    {
+                        devInst = devInstNext;
+                        break;
+                    }
+                    else if (cr == CONFIGRET.CR_NO_SUCH_DEVNODE)
+                    {
+                        // Device doesn't have siblings, go up and try again
+                        cr = SafeMethods.CM_Get_Parent(out devInstNext, devInst, 0);
+
+                        if (cr == CONFIGRET.CR_SUCCESS)
+                        {
+                            devInst = devInstNext;
+                        }
+                        else
+                        {
+                            walkDone = 1;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        output.AppendLine($"CM_Get_Sibling() returned {cr}");
+                        return;
+                    }
+                }
+            }
+            finally
+            {
+                gcHandle.Free();
+            }
         }
-        finally
+    }
+    static void PrintDevinstChildren(uint parent, uint indent, ushort deviceAddress, StringBuilder output)
+    {
+        uint next = 0;
+        var current = parent;
+        var level = indent;
+        var nodeStack = new Stack<ushort>();
+        ushort parentNode = 0;
+        uint sanityCounter = 0;
+        ushort nextNode = 1;
+
+        var cr = SafeMethods.CM_Get_Child(ref next, current, 0);
+        if (cr == CONFIGRET.CR_SUCCESS)
         {
-          gcHandle.Free();
+            current = next;
+            level++;
+            nodeStack.Push(parentNode);
         }
-        CONFIGRET sibling;
-        do
+
+        while (level > indent)
         {
-          sibling = SafeMethods.CM_Get_Sibling(ref pdnDevInst, num1, 0);
-          switch (sibling)
-          {
-            case CONFIGRET.CR_SUCCESS:
-              num1 = pdnDevInst;
-              ++node;
-              goto label_23;
-            case CONFIGRET.CR_NO_SUCH_DEVNODE:
-              if (SafeMethods.CM_Get_Parent(out pdnDevInst, num1, 0) == CONFIGRET.CR_SUCCESS)
-              {
-                num1 = pdnDevInst;
-                --level;
-                parentNode = stack.Pop();
-                continue;
-              }
-              goto label_20;
-            default:
-              goto label_22;
-          }
+            if ((++sanityCounter) > SafeMethods.LOOP_SANITY_LIMIT)
+            {
+                output.AppendLine("Sanity check failed in PrintDevinstChildren()");
+                return;
+            }
+
+            var buf = new byte[SafeMethods.MAX_DEVICE_ID_LEN];
+            var gcHandle = GCHandle.Alloc(buf, GCHandleType.Pinned);
+            var len = (uint)buf.Length;
+
+            try
+            {
+                cr = SafeMethods.CM_Get_DevNode_Registry_Property(current, (uint)CM_DRP.CM_DRP_FRIENDLYNAME, out _, gcHandle.AddrOfPinnedObject(), ref len, 0);
+                if (cr != CONFIGRET.CR_SUCCESS)
+                {
+                    len = (uint)buf.Length;
+                    /* Failed to get friendly name,
+                     * display device description instead */
+                    cr = SafeMethods.CM_Get_DevNode_Registry_Property(current, (uint)CM_DRP.CM_DRP_DEVICEDESC, out _, gcHandle.AddrOfPinnedObject(), ref len, 0);
+                }
+
+                if (cr == CONFIGRET.CR_SUCCESS)
+                {
+                    var deviceDesc = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
+                    if (string.IsNullOrEmpty(deviceDesc) == false)
+                    {
+                        if (nodeStack.TryPeek(out parentNode) == false)
+                        {
+                            parentNode = 0;
+                        }
+                    }
+
+                    print_usbpcapcmd(level, 0, deviceDesc, deviceAddress, deviceAddress, nextNode, parentNode, output);
+                }
+
+                // Go down a level to the first next.
+                cr = SafeMethods.CM_Get_Child(ref next, current, 0);
+
+                if (cr == CONFIGRET.CR_SUCCESS)
+                {
+                    current = next;
+                    level++;
+                    nodeStack.Push(nextNode);
+                    nextNode++;
+                    continue;
+                }
+            }
+            finally
+            {
+                gcHandle.Free();
+            }
+
+            // Can't go down any further, go across to the next sibling.  If
+            // there are no more siblings, go back up until there is a sibling.
+            // If we can't go up any further, we're back at the root and we're
+            // done.
+            while (true)
+            {
+                cr = SafeMethods.CM_Get_Sibling(ref next, current, 0);
+
+                if (cr == CONFIGRET.CR_SUCCESS)
+                {
+                    current = next;
+                    nextNode++;
+                    break;
+                }
+                else if (cr == CONFIGRET.CR_NO_SUCH_DEVNODE)
+                {
+                    cr = SafeMethods.CM_Get_Parent(out next, current, 0);
+
+                    if (cr == CONFIGRET.CR_SUCCESS)
+                    {
+                        current = next;
+                        level--;
+                        parentNode = nodeStack.Pop();
+                        if (current == parent || level == indent)
+                        {
+                            /* We went back to the parent, explicitly return here */
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        while (nodeStack.TryPop(out parentNode)) ;
+                        /* Nothing left to do */
+                        return;
+                    }
+                }
+                else
+                {
+                    output.AppendLine($"CM_Get_Sibling() returned {cr}");
+                    return;
+                }
+            }
         }
-        while ((int) num1 != (int) parent && (int) level != (int) indent);
-        break;
-label_20:
-        do
-          ;
-        while (stack.TryPop<ushort>(out parentNode));
-        break;
-label_22:
-        output.AppendLine(string.Format("CM_Get_Sibling() returned {0}", sibling));
-        break;
-      }
     }
 
-    private static unsafe string GetDriverKeyName(IntPtr hHubDevice, uint index)
+    private static unsafe string GetDriverKeyName(SafeFileHandle hHubDevice, uint index)
     {
       var num1 = (uint) sizeof (USB_NODE_CONNECTION_DRIVERKEY_NAME);
       USB_NODE_CONNECTION_DRIVERKEY_NAME connectionDriverkeyName;
       connectionDriverkeyName.ConnectionIndex = index;
       var num2 = new IntPtr(&connectionDriverkeyName);
       uint lpBytesReturned;
-      if (!SafeMethods.DeviceIoControl(hHubDevice, SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME, num2, num1, num2, num1, out lpBytesReturned, IntPtr.Zero))
+      var overlap = new NativeOverlapped();
+      if (!SafeMethods.DeviceIoControl(hHubDevice, SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME, num2, num1, num2, num1, out lpBytesReturned, ref overlap))
       {
           return string.Empty;
       }
@@ -646,8 +733,9 @@ label_22:
       var num3 = Marshal.AllocHGlobal((int) actualLength);
       try
       {
+          overlap = new NativeOverlapped();
         Marshal.WriteInt32(num3, (int) index);
-        if (!SafeMethods.DeviceIoControl(hHubDevice, SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME, num3, actualLength, num3, actualLength, out lpBytesReturned, IntPtr.Zero))
+        if (!SafeMethods.DeviceIoControl(hHubDevice, SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME, num3, actualLength, num3, actualLength, out lpBytesReturned, ref overlap))
         {
             return string.Empty;
         }
@@ -664,6 +752,7 @@ label_22:
     private static string? get_usbpcap_filter_hub_symlink(string filter)
     {
       var file = SafeMethods.CreateFile(filter, FileAccess.None, FileShare.None, IntPtr.Zero, FileMode.Open, FileAttributes.None, IntPtr.Zero);
+      var safeFile = new SafeFileHandle(file, true);
       if (file == SafeMethods.INVALID_HANDLE_VALUE)
       {
         Console.WriteLine("Couldn't open device: " + filter);
@@ -675,7 +764,8 @@ label_22:
         var gcHandle = GCHandle.Alloc(numArray, GCHandleType.Pinned);
         try
         {
-          return !SafeMethods.DeviceIoControl(file, SafeMethods.IOCTL_USBPCAP_GET_HUB_SYMLINK, IntPtr.Zero, 0U, gcHandle.AddrOfPinnedObject(), (uint) numArray.Length, out var _, IntPtr.Zero) ? string.Empty : Marshal.PtrToStringUni(gcHandle.AddrOfPinnedObject());
+            var overlap = new NativeOverlapped();
+          return !SafeMethods.DeviceIoControl(safeFile, SafeMethods.IOCTL_USBPCAP_GET_HUB_SYMLINK, IntPtr.Zero, 0U, gcHandle.AddrOfPinnedObject(), (uint) numArray.Length, out var _, ref overlap) ? string.Empty : Marshal.PtrToStringUni(gcHandle.AddrOfPinnedObject());
         }
         finally
         {

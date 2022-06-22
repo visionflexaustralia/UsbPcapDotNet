@@ -1,9 +1,4 @@
-﻿// Decompiled with JetBrains decompiler
-// Type: USBPcapLib.SafeMethods
-// Assembly: USBPcapLib, Version=1.0.3.0, Culture=neutral, PublicKeyToken=null
-// MVID: 5B561C15-9FD4-4B20-805D-197561BAD532
-// Assembly location: C:\Users\benp\Downloads\USBPcapLib.dll
-
+﻿
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using UsbPcapLib.Enums;
@@ -92,16 +87,17 @@ namespace UsbPcapLib
     [DllImport("kernel32.dll", SetLastError = true)]
     internal static extern bool CloseHandle(IntPtr hHandle);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    internal static extern bool DeviceIoControl(
-      IntPtr hDevice,
-      uint dwIoControlCode,
-      IntPtr lpInBuffer,
-      uint nInBufferSize,
-      IntPtr lpOutBuffer,
-      uint nOutBufferSize,
-      out uint lpBytesReturned,
-      IntPtr lpOverlapped);
+    [DllImport("Kernel32.dll", SetLastError = false, CharSet = CharSet.Auto)]
+    public static extern bool DeviceIoControl(
+        Microsoft.Win32.SafeHandles.SafeFileHandle hDevice,
+        uint IoControlCode,
+        IntPtr inBuffer,
+        uint nInBufferSize,
+        IntPtr OutBuffer,
+        uint nOutBufferSize,
+        out uint bytesReturned,
+        [In] ref NativeOverlapped Overlapped
+    );
 
     [DllImport("setupapi.dll", SetLastError = true)]
     internal static extern CONFIGRET CM_Locate_DevNodeA(

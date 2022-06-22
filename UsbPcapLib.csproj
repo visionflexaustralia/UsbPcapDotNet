@@ -10,6 +10,8 @@
         <Company>Visionflex Australia</Company>
         <PackageId>UsbPcapLib</PackageId>
         <Version>0.1.2</Version>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <Description>Updated Version of USBPcapLib</Description>
     </PropertyGroup>
 
     <ItemGroup>

@@ -1,50 +1,78 @@
-﻿// Decompiled with JetBrains decompiler
-// Type: USBPcapLib.FileAccess
-// Assembly: USBPcapLib, Version=1.0.3.0, Culture=neutral, PublicKeyToken=null
-// MVID: 5B561C15-9FD4-4B20-805D-197561BAD532
-// Assembly location: C:\Users\benp\Downloads\USBPcapLib.dll
-
-namespace UsbPcapLib.Enums
+﻿namespace UsbPcapLib.Enums
 {
-  [Flags]
-  public enum FileAccess : uint
-  {
-    None = 0,
-    AccessSystemSecurity = 16777216, // 0x01000000
-    MaximumAllowed = 33554432, // 0x02000000
-    Delete = 65536, // 0x00010000
-    ReadControl = 131072, // 0x00020000
-    WriteDAC = 262144, // 0x00040000
-    WriteOwner = 524288, // 0x00080000
-    Synchronize = 1048576, // 0x00100000
-    StandardRightsRequired = WriteOwner | WriteDAC | ReadControl | Delete, // 0x000F0000
-    StandardRightsRead = ReadControl, // 0x00020000
-    StandardRightsWrite = StandardRightsRead, // 0x00020000
-    StandardRightsExecute = StandardRightsWrite, // 0x00020000
-    StandardRightsAll = StandardRightsExecute | Synchronize | WriteOwner | WriteDAC | Delete, // 0x001F0000
-    SpecificRightsAll = 65535, // 0x0000FFFF
-    FILE_READ_DATA = 1,
-    FILE_LIST_DIRECTORY = FILE_READ_DATA, // 0x00000001
-    FILE_WRITE_DATA = 2,
-    FILE_ADD_FILE = FILE_WRITE_DATA, // 0x00000002
-    FILE_APPEND_DATA = 4,
-    FILE_ADD_SUBDIRECTORY = FILE_APPEND_DATA, // 0x00000004
-    FILE_CREATE_PIPE_INSTANCE = FILE_ADD_SUBDIRECTORY, // 0x00000004
-    FILE_READ_EA = 8,
-    FILE_WRITE_EA = 16, // 0x00000010
-    FILE_EXECUTE = 32, // 0x00000020
-    FILE_TRAVERSE = FILE_EXECUTE, // 0x00000020
-    FILE_DELETE_CHILD = 64, // 0x00000040
-    FILE_READ_ATTRIBUTES = 128, // 0x00000080
-    FILE_WRITE_ATTRIBUTES = 256, // 0x00000100
-    GenericRead = 2147483648, // 0x80000000
-    GenericWrite = 1073741824, // 0x40000000
-    GenericExecute = 536870912, // 0x20000000
-    GenericAll = 268435456, // 0x10000000
-    SPECIFIC_RIGHTS_ALL = 65535, // 0x0000FFFF
-    FILE_ALL_ACCESS = FILE_WRITE_ATTRIBUTES | FILE_READ_ATTRIBUTES | FILE_DELETE_CHILD | FILE_TRAVERSE | FILE_WRITE_EA | FILE_READ_EA | FILE_CREATE_PIPE_INSTANCE | FILE_ADD_FILE | FILE_LIST_DIRECTORY | StandardRightsAll, // 0x001F01FF
-    FILE_GENERIC_READ = FILE_READ_ATTRIBUTES | FILE_READ_EA | FILE_LIST_DIRECTORY | StandardRightsExecute | Synchronize, // 0x00120089
-    FILE_GENERIC_WRITE = FILE_WRITE_ATTRIBUTES | FILE_WRITE_EA | FILE_CREATE_PIPE_INSTANCE | FILE_ADD_FILE | StandardRightsExecute | Synchronize, // 0x00120116
-    FILE_GENERIC_EXECUTE = FILE_READ_ATTRIBUTES | FILE_TRAVERSE | StandardRightsExecute | Synchronize, // 0x001200A0
-  }
+   [Flags]
+    public enum FileAccess : uint
+    {
+        None = 0,
+        //
+        // Standard Section
+        //
+
+        AccessSystemSecurity = 0x1000000,   // AccessSystemAcl access type
+        MaximumAllowed = 0x2000000,     // MaximumAllowed access type
+
+        Delete = 0x10000,
+        ReadControl = 0x20000,
+        WriteDAC = 0x40000,
+        WriteOwner = 0x80000,
+        Synchronize = 0x100000,
+
+        StandardRightsRequired = 0xF0000,
+        StandardRightsRead = ReadControl,
+        StandardRightsWrite = ReadControl,
+        StandardRightsExecute = ReadControl,
+        StandardRightsAll = 0x1F0000,
+        SpecificRightsAll = 0xFFFF,
+
+        FILE_READ_DATA = 0x0001,        // file & pipe
+        FILE_LIST_DIRECTORY = 0x0001,       // directory
+        FILE_WRITE_DATA = 0x0002,       // file & pipe
+        FILE_ADD_FILE = 0x0002,         // directory
+        FILE_APPEND_DATA = 0x0004,      // file
+        FILE_ADD_SUBDIRECTORY = 0x0004,     // directory
+        FILE_CREATE_PIPE_INSTANCE = 0x0004, // named pipe
+        FILE_READ_EA = 0x0008,          // file & directory
+        FILE_WRITE_EA = 0x0010,         // file & directory
+        FILE_EXECUTE = 0x0020,          // file
+        FILE_TRAVERSE = 0x0020,         // directory
+        FILE_DELETE_CHILD = 0x0040,     // directory
+        FILE_READ_ATTRIBUTES = 0x0080,      // all
+        FILE_WRITE_ATTRIBUTES = 0x0100,     // all
+
+        //
+        // Generic Section
+        //
+
+        GenericRead = 0x80000000,
+        GenericWrite = 0x40000000,
+        GenericExecute = 0x20000000,
+        GenericAll = 0x10000000,
+
+        SPECIFIC_RIGHTS_ALL = 0x00FFFF,
+        FILE_ALL_ACCESS =
+        StandardRightsRequired |
+        Synchronize |
+        0x1FF,
+
+        FILE_GENERIC_READ =
+        StandardRightsRead |
+        FILE_READ_DATA |
+        FILE_READ_ATTRIBUTES |
+        FILE_READ_EA |
+        Synchronize,
+
+        FILE_GENERIC_WRITE =
+        StandardRightsWrite |
+        FILE_WRITE_DATA |
+        FILE_WRITE_ATTRIBUTES |
+        FILE_WRITE_EA |
+        FILE_APPEND_DATA |
+        Synchronize,
+
+        FILE_GENERIC_EXECUTE =
+        StandardRightsExecute |
+          FILE_READ_ATTRIBUTES |
+          FILE_EXECUTE |
+          Synchronize
+    }
 }
