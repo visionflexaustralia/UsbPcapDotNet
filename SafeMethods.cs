@@ -1,6 +1,7 @@
 ﻿
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
+using Microsoft.Win32.SafeHandles;
 using UsbPcapLib.Enums;
 using UsbPcapLib.Structs;
 using FileAccess = UsbPcapLib.Enums.FileAccess;
@@ -189,5 +190,17 @@ namespace UsbPcapLib
 
     [DllImport("setupapi.dll", SetLastError=true)]
     public static extern unsafe bool SetupDiEnumDeviceInfo(SP_DEVINFO_DATA* DeviceInfoSet, uint MemberIndex, ref SP_DEVINFO_DATA DeviceInfoData);
+
+    [DllImport("setupapi.dll", SetLastError=true)]
+    public static extern CONFIGRET CM_Get_Device_ID_Ex(IntPtr devInfoDevInst, [MarshalAs(UnmanagedType.LPWStr, SizeConst = 200)] ref string buffer, int bufferLen, uint flags, IntPtr? remoteMachineHandle = null);
+
+    [DllImport("setupapi.dll", SetLastError=true)]
+    public static extern bool SetupDiSetClassInstallParams(SafeFileHandle devs, SP_DEVINFO_DATA devInfo, SP_CLASSINSTALL_HEADER pcpClassInstallHeader, uint u);
+
+    [DllImport("setupapi.dll", SetLastError=true)]
+    public static extern bool SetupDiCallClassInstaller(int difPropertychange, SafeFileHandle devs, SP_DEVINFO_DATA devInfo);
+
+    [DllImport("setupapi.dll", SetLastError=true)]
+    public static extern bool SetupDiGetDeviceInstallParams(SafeFileHandle devs, SP_DEVINFO_DATA devInfo, ref SP_DEVINSTALL_PARAMS devParams);
   }
 }
