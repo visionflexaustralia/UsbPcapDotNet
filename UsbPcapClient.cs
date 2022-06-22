@@ -872,12 +872,12 @@ namespace UsbPcapLib
     }
 
     public static unsafe void foreach_host_controller(
-        Action<SafeFileHandle, SP_DEVINFO_DATA, SP_DEVINFO_LIST_DETAIL_DATA> callback)
+        Action<SafeFileHandle, SP_DEVINFO_DATA, SP_DEVINFO_LIST_DETAIL_DATA_W> callback)
     {
         var devs = (SP_DEVINFO_DATA*)SafeMethods.INVALID_HANDLE_VALUE;
         uint devIndex;
         SP_DEVINFO_DATA devInfo = new SP_DEVINFO_DATA();
-        SP_DEVINFO_LIST_DETAIL_DATA devInfoListDetail = new SP_DEVINFO_LIST_DETAIL_DATA();
+        SP_DEVINFO_LIST_DETAIL_DATA_W devInfoListDetail = new SP_DEVINFO_LIST_DETAIL_DATA_W();
 
         try
         {
@@ -886,21 +886,24 @@ namespace UsbPcapLib
             devs = SafeMethods.SetupDiGetClassDevsEx(
                 DevInterfaceUsbHostControllerGuid,
                 null,
-                null,
+                IntPtr.Zero,
                 DIGCF.DIGCF_DEVICEINTERFACE | DIGCF.DIGCF_PRESENT,
                 null,
                 null,
-                null);
+                IntPtr.Zero);
 
             if ((IntPtr)devs == SafeMethods.INVALID_HANDLE_VALUE)
             {
                 throw new ApplicationException("SetupDiCreateDeviceInfoListEx Failed");
             }
 
-            devInfoListDetail.cbSize = (uint)sizeof(SP_DEVINFO_LIST_DETAIL_DATA);
-            if (!SafeMethods.SetupDiGetDeviceInfoListDetail(devs, &devInfoListDetail))
+            devInfoListDetail.cbSize = (uint)Marshal.SizeOf<SP_DEVINFO_LIST_DETAIL_DATA_W>();
+
+            if (!SafeMethods.SetupDiGetDeviceInfoListDetailW(devs, ref devInfoListDetail))
             {
-                throw new ApplicationException("SetupDiGetDeviceInfoListDetail Failed");
+                var error = Marshal.GetLastWin32Error();
+                var hr = Marshal.GetHRForLastWin32Error();
+                throw new ApplicationException($"SetupDiGetDeviceInfoListDetail Failed: err:{error:x8} HR:{hr:x8}");
             }
 
             devInfo.cbSize = (uint)sizeof(SP_DEVINFO_DATA);
@@ -920,7 +923,7 @@ namespace UsbPcapLib
     public static unsafe void restart_device(
         SafeFileHandle devs,
         SP_DEVINFO_DATA devInfo,
-        SP_DEVINFO_LIST_DETAIL_DATA devInfoListDetail)
+        SP_DEVINFO_LIST_DETAIL_DATA_W devInfoListDetail)
     {
         var pcp = new SP_PROPCHANGE_PARAMS();
         var devParams = new SP_DEVINSTALL_PARAMS();

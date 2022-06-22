@@ -140,12 +140,12 @@ namespace UsbPcapLib
             GuidClass,
         [MarshalAs(UnmanagedType.LPWStr)]
         string? Enumerator,
-        IntPtr? hParent,
+        IntPtr hParent,
         DIGCF nFlags,
         SP_DEVINFO_DATA* DeviceInfoSet,
         [MarshalAs(UnmanagedType.LPWStr)]
         string? MachineName,
-        IntPtr? Reserved);
+        IntPtr Reserved);
 
 
     internal static int CTL_CODE(int deviceType, int function, int method, int access) => deviceType << 16 | access << 14 | function << 2 | method;
@@ -168,7 +168,7 @@ namespace UsbPcapLib
 
     internal static uint IOCTL_USB_GET_NODE_CONNECTION_NAME => (uint) CTL_CODE(34, 261, 0, 0);
 
-    public static unsafe SP_DEVINFO_DATA* SetupDiGetClassDevsEx(Guid devInterfaceUsbHostControllerGuid, string? enumerator, IntPtr? hwndParent, DIGCF flags, SP_DEVINFO_DATA* deviceInfoSet, string? machineName, IntPtr? reserved)
+    public static unsafe SP_DEVINFO_DATA* SetupDiGetClassDevsEx(Guid devInterfaceUsbHostControllerGuid, string? enumerator, IntPtr hwndParent, DIGCF flags, SP_DEVINFO_DATA* deviceInfoSet, string? machineName, IntPtr reserved)
     {
         return SetupDiGetClassDevsEx(
             ref devInterfaceUsbHostControllerGuid,
@@ -183,10 +183,10 @@ namespace UsbPcapLib
     [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern unsafe bool SetupDiDestroyDeviceInfoList(SP_DEVINFO_DATA* devs);
 
-    [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern unsafe bool SetupDiGetDeviceInfoListDetail(
+    [DllImport("setupapi.dll", SetLastError = true)]
+    public static extern unsafe bool SetupDiGetDeviceInfoListDetailW(
         SP_DEVINFO_DATA* devs,
-        SP_DEVINFO_LIST_DETAIL_DATA* spDevinfoListDetailData);
+        ref SP_DEVINFO_LIST_DETAIL_DATA_W spDevinfoListDetailDataW);
 
     [DllImport("setupapi.dll", SetLastError=true)]
     public static extern unsafe bool SetupDiEnumDeviceInfo(SP_DEVINFO_DATA* DeviceInfoSet, uint MemberIndex, ref SP_DEVINFO_DATA DeviceInfoData);

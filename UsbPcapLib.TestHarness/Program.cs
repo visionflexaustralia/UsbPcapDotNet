@@ -41,4 +41,6 @@ client.DataRead += (sender, eventArgs) =>
 
 client.start_capture();
 
+USBPcapClient.foreach_host_controller(USBPcapClient.restart_device);
+
 client.wait_for_exit_signal();
