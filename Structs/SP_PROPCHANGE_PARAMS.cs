@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib;
+namespace UsbPcapDotNet;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct SP_PROPCHANGE_PARAMS
@@ -12,8 +12,8 @@ public struct SP_PROPCHANGE_PARAMS
 
     public SP_PROPCHANGE_PARAMS()
     {
-        StateChange = 0;
-        Scope = 0;
-        HwProfile = 0;
+        this.StateChange = 0;
+        this.Scope = 0;
+        this.HwProfile = 0;
     }
 };

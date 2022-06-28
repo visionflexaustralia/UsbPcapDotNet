@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib;
+namespace UsbPcapDotNet;
 
 internal static class HelperExtension
 {

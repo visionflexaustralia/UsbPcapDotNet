@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib;
+namespace UsbPcapDotNet;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct SP_DEVINSTALL_PARAMS

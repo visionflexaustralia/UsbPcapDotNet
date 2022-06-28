@@ -5,11 +5,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
-using UsbPcapDotNet.Enums;
-using UsbPcapDotNet.Structs;
-using FileAccess = UsbPcapDotNet.Enums.FileAccess;
-using FileAttributes = UsbPcapDotNet.Enums.FileAttributes;
-using FileShare = UsbPcapDotNet.Enums.FileShare;
 
 namespace UsbPcapDotNet;
 
@@ -260,11 +255,11 @@ public class USBPcapClient : IDisposable
     {
         var filter_handle = SafeMethods.CreateFile(
             data.device,
-            System.IO.FileAccess.FILE_GENERIC_READ | System.IO.FileAccess.FILE_GENERIC_WRITE,
-            System.IO.FileShare.None,
+            FileAccess.ReadWrite,
+            FileShare.None,
             IntPtr.Zero,
             FileMode.Open,
-            System.IO.FileAttributes.Overlapped,
+            FileAttributes.Overlapped,
             IntPtr.Zero);
 
         if (filter_handle == SafeMethods.INVALID_HANDLE_VALUE)
@@ -425,11 +420,11 @@ public class USBPcapClient : IDisposable
 
         var hHubDevice = SafeMethods.CreateFile(
             deviceName,
-            System.IO.FileAccess.GenericWrite,
+            FileAccess.Write,
             System.IO.FileShare.Write,
             IntPtr.Zero,
             FileMode.Open,
-            System.IO.FileAttributes.None,
+            FileAttributes.Normal,
             IntPtr.Zero);
         var safeFileHandle = new SafeFileHandle(hHubDevice, true);
 
@@ -960,13 +955,15 @@ public class USBPcapClient : IDisposable
     {
         var file = SafeMethods.CreateFile(
             filter,
-            System.IO.FileAccess.None,
-            System.IO.FileShare.None,
+            FileAccess.Read,
+            FileShare.None,
             IntPtr.Zero,
             FileMode.Open,
-            System.IO.FileAttributes.None,
+            FileAttributes.None,
             IntPtr.Zero);
+
         var safeFile = new SafeFileHandle(file, true);
+
         if (file == SafeMethods.INVALID_HANDLE_VALUE)
         {
             Console.WriteLine("Couldn't open device: " + filter);
@@ -1099,7 +1096,7 @@ public class USBPcapClient : IDisposable
         var devs = (SP_DEVINFO_DATA*)SafeMethods.INVALID_HANDLE_VALUE;
         uint devIndex;
         var devInfo = new SP_DEVINFO_DATA();
-        var devInfoListDetail = new SP_DEVINFO_LIST_DETAIL_DATA();
+        var devInfoListDetail = new SP_DEVINFO_LIST_DETAIL_DATA_W();
 
         try
         {
@@ -1155,7 +1152,7 @@ public class USBPcapClient : IDisposable
         try
         {
 
-            if (SafeMethods.CM_Get_Device_ID_Ex(devInfo.DevInst,
+            if (SafeMethods.CM_Get_Device_ID_Ex((IntPtr)(&devInfo.DevInst),
                     ref devID,
                     MAX_DEVICE_ID_LEN,
                     0,

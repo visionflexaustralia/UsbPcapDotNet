@@ -1,6 +1,4 @@
-﻿using UsbPcapLib.Structs;
-
-namespace UsbPcapLib;
+﻿namespace UsbPcapDotNet;
 
 public class HeaderEventArgs : EventArgs
 {

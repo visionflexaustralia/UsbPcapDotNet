@@ -1,4 +1,4 @@
-namespace UsbPcapLib;
+namespace UsbPcapDotNet;
 
 [Flags]
 public enum SP_DEVINSTALL_PARAMS_FLAGS : int

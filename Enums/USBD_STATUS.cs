@@ -1,4 +1,4 @@
-﻿namespace UsbPcapLib.Enums;
+﻿namespace UsbPcapDotNet;
 
 public enum USBD_STATUS : uint
 {

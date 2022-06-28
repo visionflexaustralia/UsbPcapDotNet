@@ -1,11 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
-using UsbPcapDotNet.Enums;
-using UsbPcapDotNet.Structs;
-using FileAccess = UsbPcapDotNet.Enums.FileAccess;
-using FileAttributes = UsbPcapDotNet.Enums.FileAttributes;
-using FileShare = UsbPcapDotNet.Enums.FileShare;
 
 namespace UsbPcapDotNet;
 
@@ -93,11 +88,11 @@ internal class SafeMethods
     [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     internal static extern IntPtr CreateFile(
         [MarshalAs(UnmanagedType.LPTStr)] string filename,
-        [MarshalAs(UnmanagedType.U4)] Enums.FileAccess access,
-        [MarshalAs(UnmanagedType.U4)] Enums.FileShare share,
+        [MarshalAs(UnmanagedType.U4)] FileAccess access,
+        [MarshalAs(UnmanagedType.U4)] System.IO.FileShare share,
         IntPtr securityAttributes,
         [MarshalAs(UnmanagedType.U4)] FileMode creationDisposition,
-        [MarshalAs(UnmanagedType.U4)] Enums.FileAttributes flagsAndAttributes,
+        [MarshalAs(UnmanagedType.U4)] FileAttributes flagsAndAttributes,
         IntPtr templateFile);
 
     [DllImport("kernel32.dll", SetLastError = true)]
@@ -206,4 +201,9 @@ internal class SafeMethods
         SafeFileHandle devs,
         SP_DEVINFO_DATA devInfo,
         ref SP_DEVINSTALL_PARAMS devParams);
+
+
+    [DllImport("setupapi.dll", SetLastError=true)]
+    public static extern unsafe bool SetupDiEnumDeviceInfo(SP_DEVINFO_DATA* DeviceInfoSet, uint MemberIndex, ref SP_DEVINFO_DATA DeviceInfoData);
+
 }

@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib;
+namespace UsbPcapDotNet;
 
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto, Pack = 1)]
 public struct SP_DEVINFO_LIST_DETAIL_DATA_W

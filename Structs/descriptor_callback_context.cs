@@ -1,4 +1,4 @@
-﻿namespace UsbPcapLib.Structs;
+﻿namespace UsbPcapDotNet;
 
 public unsafe struct list_entry
 {
