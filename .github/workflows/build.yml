@@ -1,4 +1,4 @@
-name: .NET
+name: .NET Build
 
 on:
   push:
@@ -15,14 +15,12 @@ jobs:
       uses: actions/setup-dotnet@v1
       with:
         dotnet-version: 6.0.x
-    - name: Configure NuGet
-      run: dotnet nuget add source --username visionflexaustralia --password ${{ secrets.PACKAGE_KEY }} --store-password-in-clear-text --name visionflex-nuget "https://nuget.pkg.github.com/visionflexaustralia/index.json"
     - name: Restore dependencies
-      run: dotnet restore ./UsbPcapLib.sln
+      run: dotnet restore ./UsbPcapDotNet.sln
     - name: Build
-      run: dotnet build --no-restore ./UsbPcapLib.sln
+      run: dotnet build --no-restore ./UsbPcapDotNet.sln
     - name: Test
-      run: dotnet test -c Release --verbosity normal --logger:junit ./UsbPcapLib.sln
+      run: dotnet test -c Release --verbosity normal --logger:junit ./UsbPcapDotNet.sln
     - name: Publish Unit Test Results
       uses: EnricoMi/publish-unit-test-result-action/composite@v1
       if: always()
