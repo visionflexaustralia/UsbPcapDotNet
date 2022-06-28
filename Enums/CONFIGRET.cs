@@ -1,7 +1,7 @@
-﻿namespace UsbPcapLib.Enums
+﻿namespace UsbPcapLib.Enums;
+
+public enum CONFIGRET
 {
-  public enum CONFIGRET
-  {
     CR_SUCCESS = 0,
     CR_DEFAULT = 1,
     CR_OUT_OF_MEMORY = 2,
@@ -66,6 +66,5 @@
     CR_INVALID_CONFLICT_LIST = 57, // 0x00000039
     CR_INVALID_INDEX = 58, // 0x0000003A
     CR_INVALID_STRUCTURE_SIZE = 59, // 0x0000003B
-    NUM_CR_RESULTS = 60, // 0x0000003C
-  }
+    NUM_CR_RESULTS = 60 // 0x0000003C
 }

@@ -329,9 +329,8 @@ dotnet_style_qualification_for_field = true:suggestion
 dotnet_style_qualification_for_method = true:suggestion
 dotnet_style_qualification_for_property = true:suggestion
 dotnet_style_require_accessibility_modifiers = for_non_interface_members:suggestion
-file_header_template =
+file_header_template = # ReSharper properties
 
-# ReSharper properties
 resharper_accessor_owner_body = expression_body
 resharper_alignment_tab_fill_style = use_spaces
 resharper_align_first_arg_by_paren = false

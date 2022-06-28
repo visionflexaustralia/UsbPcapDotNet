@@ -10,8 +10,8 @@ public struct UnicodeString : IDisposable
 
     public UnicodeString(string s)
     {
-        this.Length = (ushort) (s.Length * 2);
-        this.MaximumLength = (ushort) (this.Length + 2U);
+        this.Length = (ushort)(s.Length * 2);
+        this.MaximumLength = (ushort)(this.Length + 2U);
         this.buffer = Marshal.StringToHGlobalUni(s);
     }
 
@@ -21,5 +21,8 @@ public struct UnicodeString : IDisposable
         this.buffer = IntPtr.Zero;
     }
 
-    public override string? ToString() => Marshal.PtrToStringUni(this.buffer);
+    public override string? ToString()
+    {
+        return Marshal.PtrToStringUni(this.buffer);
+    }
 }

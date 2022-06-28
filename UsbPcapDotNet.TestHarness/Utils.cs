@@ -3,7 +3,7 @@
 public static class Utils
 {
     /// <summary>
-    /// Convert byte array to string as a sequence of hex values.
+    ///     Convert byte array to string as a sequence of hex values.
     /// </summary>
     /// <param name="bytes"></param>
     /// <returns></returns>
@@ -11,9 +11,9 @@ public static class Utils
     {
         return bytes.Aggregate(string.Empty, (current, b) => $"{current}{b:x2}{deliminator}")[..^deliminator.Length];
     }
-    
+
     /// <summary>
-    /// Compare two bytes array
+    ///     Compare two bytes array
     /// </summary>
     /// <param name="a1"></param>
     /// <param name="a2"></param>

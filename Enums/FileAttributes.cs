@@ -1,8 +1,8 @@
-﻿namespace UsbPcapLib.Enums
+﻿namespace UsbPcapLib.Enums;
+
+[Flags]
+public enum FileAttributes : uint
 {
-  [Flags]
-  public enum FileAttributes : uint
-  {
     None = 0,
     Readonly = 1,
     Hidden = 2,
@@ -28,6 +28,5 @@
     PosixSemantics = 16777216, // 0x01000000
     OpenReparsePoint = 2097152, // 0x00200000
     OpenNoRecall = 1048576, // 0x00100000
-    FirstPipeInstance = 524288, // 0x00080000
-  }
+    FirstPipeInstance = 524288 // 0x00080000
 }

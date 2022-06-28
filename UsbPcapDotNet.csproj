@@ -16,15 +16,15 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <Compile Remove="UsbPcapDotNet.TestHarness\**" />
+        <Compile Remove="UsbPcapDotNet.TestHarness\**"/>
     </ItemGroup>
 
     <ItemGroup>
-      <EmbeddedResource Remove="UsbPcapDotNet.TestHarness\**" />
+        <EmbeddedResource Remove="UsbPcapDotNet.TestHarness\**"/>
     </ItemGroup>
 
     <ItemGroup>
-      <None Remove="UsbPcapDotNet.TestHarness\**" />
+        <None Remove="UsbPcapDotNet.TestHarness\**"/>
     </ItemGroup>
 
 </Project>

@@ -1,10 +1,10 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib.Structs
+namespace UsbPcapLib.Structs;
+
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct USB_HUB_DESCRIPTOR
 {
-  [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  public struct USB_HUB_DESCRIPTOR
-  {
     public byte bDescriptorLength;
     public byte bDescriptorType;
     public byte bNumberOfPorts;
@@ -12,5 +12,4 @@ namespace UsbPcapLib.Structs
     public byte bPowerOnToPowerGood;
     public byte bHubControlCurrent;
     public unsafe fixed byte bRemoveAndPowerMask[64];
-  }
 }

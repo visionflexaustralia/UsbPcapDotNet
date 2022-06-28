@@ -1,10 +1,10 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib.Structs
+namespace UsbPcapLib.Structs;
+
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct pcap_hdr_t
 {
-  [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  public struct pcap_hdr_t
-  {
     public uint magic_number;
     public ushort version_major;
     public ushort version_minor;
@@ -12,5 +12,4 @@ namespace UsbPcapLib.Structs
     public uint sigfigs;
     public uint snaplen;
     public uint network;
-  }
 }

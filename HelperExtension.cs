@@ -1,11 +1,11 @@
-﻿
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace UsbPcapLib;
 
 internal static class HelperExtension
 {
-    public static bool TryPeek<T>(this Stack<T> stack, out T item) where T: struct
+    public static bool TryPeek<T>(this Stack<T> stack, out T item)
+        where T : struct
     {
         item = default;
 
@@ -18,7 +18,8 @@ internal static class HelperExtension
         return true;
     }
 
-    public static bool TryPop<T>(this Stack<T> stack, out T item) where T: struct
+    public static bool TryPop<T>(this Stack<T> stack, out T item)
+        where T : struct
     {
         item = default;
 
@@ -30,7 +31,9 @@ internal static class HelperExtension
         item = stack.Pop();
         return true;
     }
-    public static unsafe bool TryRead<T>(this BinaryReader br, out T value) where T : unmanaged
+
+    public static unsafe bool TryRead<T>(this BinaryReader br, out T value)
+        where T : unmanaged
     {
         var size = sizeof(T);
         value = default;

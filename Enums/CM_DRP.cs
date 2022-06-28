@@ -1,7 +1,7 @@
-﻿namespace UsbPcapLib.Enums
+﻿namespace UsbPcapLib.Enums;
+
+public enum CM_DRP
 {
-  public enum CM_DRP
-  {
     CM_DRP_DEVICEDESC = 1,
     CM_DRP_HARDWAREID = 2,
     CM_DRP_COMPATIBLEIDS = 3,
@@ -19,6 +19,5 @@
     CM_DRP_PHYSICAL_DEVICE_OBJECT_NAME = 15, // 0x0000000F
     CM_DRP_CAPABILITIES = 16, // 0x00000010
     CM_DRP_UI_NUMBER = 17, // 0x00000011
-    CM_DRP_UPPERFILTERS = 18, // 0x00000012
-  }
+    CM_DRP_UPPERFILTERS = 18 // 0x00000012
 }

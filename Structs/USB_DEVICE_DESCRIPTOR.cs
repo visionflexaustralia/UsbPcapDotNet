@@ -1,10 +1,10 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib.Structs
+namespace UsbPcapLib.Structs;
+
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct USB_DEVICE_DESCRIPTOR
 {
-  [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  public struct USB_DEVICE_DESCRIPTOR
-  {
     public byte bLength;
     public byte bDescriptorType;
     public ushort bcdUSB;
@@ -19,5 +19,4 @@ namespace UsbPcapLib.Structs
     public byte iProduct;
     public byte iSerialNumber;
     public byte bNumConfigurations;
-  }
 }

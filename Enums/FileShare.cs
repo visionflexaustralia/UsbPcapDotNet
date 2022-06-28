@@ -1,11 +1,10 @@
-﻿namespace UsbPcapLib.Enums
+﻿namespace UsbPcapLib.Enums;
+
+[Flags]
+public enum FileShare : uint
 {
-  [Flags]
-  public enum FileShare : uint
-  {
     None = 0,
     Read = 1,
     Write = 2,
-    Delete = 4,
-  }
+    Delete = 4
 }
