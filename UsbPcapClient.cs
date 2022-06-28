@@ -5,13 +5,8 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
-using UsbPcapLib.Enums;
-using UsbPcapLib.Structs;
-using FileAccess = UsbPcapLib.Enums.FileAccess;
-using FileAttributes = UsbPcapLib.Enums.FileAttributes;
-using FileShare = UsbPcapLib.Enums.FileShare;
 
-namespace UsbPcapLib;
+namespace UsbPcapDotNet;
 
 public class USBPcapClient : IDisposable
 {
@@ -21,6 +16,27 @@ public class USBPcapClient : IDisposable
         ushort deviceAddress,
         USB_DEVICE_DESCRIPTOR desc,
         descriptor_callback_context* context);
+
+    public const int DIGCF_ALLCLASSES = (0x00000004);
+    public const int DIGCF_PRESENT = (0x00000002);
+    public const int INVALID_HANDLE_VALUE = -1;
+    public const int SPDRP_DEVICEDESC = (0x00000000);
+    public const int MAX_DEV_LEN = 1000;
+    public const int DEVICE_NOTIFY_WINDOW_HANDLE = (0x00000000);
+    public const int DEVICE_NOTIFY_SERVICE_HANDLE = (0x00000001);
+    public const int DEVICE_NOTIFY_ALL_INTERFACE_CLASSES = (0x00000004);
+    public const int DBT_DEVTYP_DEVICEINTERFACE = (0x00000005);
+    public const int DBT_DEVNODES_CHANGED = (0x0007);
+    public const int WM_DEVICECHANGE = (0x0219);
+    public const int DIF_PROPERTYCHANGE = (0x00000012);
+    public const int DICS_FLAG_GLOBAL = (0x00000001);
+    public const int DICS_FLAG_CONFIGSPECIFIC = (0x00000002);
+    public const int DICS_ENABLE = (0x00000001);
+    public const int DICS_DISABLE = (0x00000002);
+    public const int DICS_PROPCHANGE = ((0x00000003));
+    public const uint ERROR_INVALID_DATA = 13;
+    public const uint ERROR_NO_MORE_ITEMS = 259;
+    public const uint ERROR_ELEMENT_NOT_FOUND = 1168;
 
     public const int BUFFER_SIZE = 4096;
     private ThreadData _data;
@@ -239,7 +255,7 @@ public class USBPcapClient : IDisposable
     {
         var filter_handle = SafeMethods.CreateFile(
             data.device,
-            FileAccess.FILE_GENERIC_READ | FileAccess.FILE_GENERIC_WRITE,
+            FileAccess.ReadWrite,
             FileShare.None,
             IntPtr.Zero,
             FileMode.Open,
@@ -404,11 +420,11 @@ public class USBPcapClient : IDisposable
 
         var hHubDevice = SafeMethods.CreateFile(
             deviceName,
-            FileAccess.GenericWrite,
-            FileShare.Write,
+            FileAccess.Write,
+            System.IO.FileShare.Write,
             IntPtr.Zero,
             FileMode.Open,
-            FileAttributes.None,
+            FileAttributes.Normal,
             IntPtr.Zero);
         var safeFileHandle = new SafeFileHandle(hHubDevice, true);
 
@@ -939,13 +955,15 @@ public class USBPcapClient : IDisposable
     {
         var file = SafeMethods.CreateFile(
             filter,
-            FileAccess.None,
+            FileAccess.Read,
             FileShare.None,
             IntPtr.Zero,
             FileMode.Open,
             FileAttributes.None,
             IntPtr.Zero);
+
         var safeFile = new SafeFileHandle(file, true);
+
         if (file == SafeMethods.INVALID_HANDLE_VALUE)
         {
             Console.WriteLine("Couldn't open device: " + filter);
@@ -1073,12 +1091,12 @@ public class USBPcapClient : IDisposable
     }
 
     public static unsafe void foreach_host_controller(
-        Action<SafeFileHandle, SP_DEVINFO_DATA, SP_DEVINFO_LIST_DETAIL_DATA> callback)
+        Action<SafeFileHandle, SP_DEVINFO_DATA, SP_DEVINFO_LIST_DETAIL_DATA_W> callback)
     {
         var devs = (SP_DEVINFO_DATA*)SafeMethods.INVALID_HANDLE_VALUE;
         uint devIndex;
         var devInfo = new SP_DEVINFO_DATA();
-        var devInfoListDetail = new SP_DEVINFO_LIST_DETAIL_DATA();
+        var devInfoListDetail = new SP_DEVINFO_LIST_DETAIL_DATA_W();
 
         try
         {
@@ -1087,21 +1105,24 @@ public class USBPcapClient : IDisposable
             devs = SafeMethods.SetupDiGetClassDevsEx(
                 DevInterfaceUsbHostControllerGuid,
                 null,
-                null,
+                IntPtr.Zero,
                 DIGCF.DIGCF_DEVICEINTERFACE | DIGCF.DIGCF_PRESENT,
                 null,
                 null,
-                null);
+                IntPtr.Zero);
 
             if ((IntPtr)devs == SafeMethods.INVALID_HANDLE_VALUE)
             {
                 throw new ApplicationException("SetupDiCreateDeviceInfoListEx Failed");
             }
 
-            devInfoListDetail.cbSize = (uint)sizeof(SP_DEVINFO_LIST_DETAIL_DATA);
-            if (!SafeMethods.SetupDiGetDeviceInfoListDetail(devs, &devInfoListDetail))
+            devInfoListDetail.cbSize = (uint)Marshal.SizeOf<SP_DEVINFO_LIST_DETAIL_DATA_W>();
+
+            if (!SafeMethods.SetupDiGetDeviceInfoListDetailW(devs, ref devInfoListDetail))
             {
-                throw new ApplicationException("SetupDiGetDeviceInfoListDetail Failed");
+                var error = Marshal.GetLastWin32Error();
+                var hr = Marshal.GetHRForLastWin32Error();
+                throw new ApplicationException($"SetupDiGetDeviceInfoListDetail Failed: err:{error:x8} HR:{hr:x8}");
             }
 
             devInfo.cbSize = (uint)sizeof(SP_DEVINFO_DATA);
@@ -1114,5 +1135,68 @@ public class USBPcapClient : IDisposable
         {
             SafeMethods.SetupDiDestroyDeviceInfoList(devs);
         }
+    }
+
+    private const int MAX_DEVICE_ID_LEN = 200;
+
+    public static unsafe void restart_device(
+        SafeFileHandle devs,
+        SP_DEVINFO_DATA devInfo,
+        SP_DEVINFO_LIST_DETAIL_DATA_W devInfoListDetail)
+    {
+        var pcp = new SP_PROPCHANGE_PARAMS();
+        var devParams = new SP_DEVINSTALL_PARAMS();
+        var devID = string.Empty;
+
+        //var handle = GCHandle.Alloc(devID);
+        try
+        {
+
+            if (SafeMethods.CM_Get_Device_ID_Ex((IntPtr)(&devInfo.DevInst),
+                    ref devID,
+                    MAX_DEVICE_ID_LEN,
+                    0,
+                    devInfoListDetail.RemoteMachineHandle) != CONFIGRET.CR_SUCCESS)
+            {
+                devID = '\0' + devID[1..];
+            }
+            else
+            { }
+        }
+        finally
+        {
+            //handle.Free();
+        }
+
+        pcp.ClassInstallHeader.cbSize = (uint)sizeof(SP_CLASSINSTALL_HEADER);
+        pcp.ClassInstallHeader.InstallFunction = DIF_PROPERTYCHANGE;
+        pcp.StateChange = DICS_PROPCHANGE;
+        pcp.Scope = DICS_FLAG_CONFIGSPECIFIC;
+        pcp.HwProfile = 0;
+
+        if (!SafeMethods.SetupDiSetClassInstallParams(devs, devInfo, pcp.ClassInstallHeader, (uint)sizeof(SP_PROPCHANGE_PARAMS)) ||
+            !SafeMethods.SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, devs, devInfo))
+        {
+            Console.WriteLine("Failed to invoke DIF_PROPERTYCHANGE! Please reboot.\n");
+        }
+        else
+        {
+            devParams.cbSize = GetSizeOf(devParams);
+
+            if (SafeMethods.SetupDiGetDeviceInstallParams(devs,devInfo, ref devParams) &&
+                (devParams.Flags & (int)( SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDRESTART | SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDREBOOT)) != 0)
+            {
+                Console.WriteLine("Reboot required.\n");
+            }
+            else
+            {
+                Console.WriteLine("Restarted.\n");
+            }
+        }
+    }
+
+    public static unsafe int GetSizeOf<T>(T obj) where T: unmanaged
+    {
+        return sizeof(T);
     }
 }

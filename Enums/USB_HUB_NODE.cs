@@ -1,4 +1,4 @@
-﻿namespace UsbPcapLib.Enums;
+﻿namespace UsbPcapDotNet;
 
 public enum USB_HUB_NODE
 {

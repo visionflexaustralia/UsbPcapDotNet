@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib.Structs;
+namespace UsbPcapDotNet;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct SP_DEVINFO_DATA

@@ -1,4 +1,4 @@
-﻿namespace UsbPcapLib.Structs;
+﻿namespace UsbPcapDotNet;
 
 public enum USBPCAP_TRANSFER_TYPE : byte
 {

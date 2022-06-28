@@ -1,4 +1,4 @@
-﻿namespace UsbPcapLib.TestHarness;
+﻿namespace UsbPcapDotNet.TestHarness;
 
 public static class Utils
 {

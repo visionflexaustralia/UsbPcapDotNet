@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib.Structs;
+namespace UsbPcapDotNet;
 
 public struct UnicodeString : IDisposable
 {

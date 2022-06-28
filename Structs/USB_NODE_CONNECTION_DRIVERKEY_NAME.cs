@@ -1,4 +1,4 @@
-﻿namespace UsbPcapLib.Structs;
+﻿namespace UsbPcapDotNet;
 
 public struct USB_NODE_CONNECTION_DRIVERKEY_NAME
 {

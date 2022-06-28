@@ -1,7 +1,6 @@
 ﻿using System.Runtime.InteropServices;
-using UsbPcapLib.Structs;
 
-namespace UsbPcapLib;
+namespace UsbPcapDotNet;
 
 [StructLayout(LayoutKind.Sequential)]
 public struct ThreadData

@@ -1,7 +1,6 @@
 ﻿using System.Runtime.InteropServices;
-using UsbPcapLib.Enums;
 
-namespace UsbPcapLib.Structs;
+namespace UsbPcapDotNet;
 
 [StructLayout(LayoutKind.Explicit, Pack = 1)]
 public struct USB_NODE_INFORMATION

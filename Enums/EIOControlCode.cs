@@ -1,4 +1,4 @@
-﻿namespace UsbPcapLib.Enums;
+﻿namespace UsbPcapDotNet;
 
 using sFileAccess = System.IO.FileAccess;
 

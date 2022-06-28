@@ -1,13 +1,8 @@
 ﻿using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
-using UsbPcapLib.Enums;
-using UsbPcapLib.Structs;
-using FileAccess = UsbPcapLib.Enums.FileAccess;
-using FileAttributes = UsbPcapLib.Enums.FileAttributes;
-using FileShare = UsbPcapLib.Enums.FileShare;
 
-namespace UsbPcapLib;
+namespace UsbPcapDotNet;
 
 internal class SafeMethods
 {
@@ -94,7 +89,7 @@ internal class SafeMethods
     internal static extern IntPtr CreateFile(
         [MarshalAs(UnmanagedType.LPTStr)] string filename,
         [MarshalAs(UnmanagedType.U4)] FileAccess access,
-        [MarshalAs(UnmanagedType.U4)] FileShare share,
+        [MarshalAs(UnmanagedType.U4)] System.IO.FileShare share,
         IntPtr securityAttributes,
         [MarshalAs(UnmanagedType.U4)] FileMode creationDisposition,
         [MarshalAs(UnmanagedType.U4)] FileAttributes flagsAndAttributes,
@@ -135,6 +130,7 @@ internal class SafeMethods
     [DllImport("setupapi.dll", SetLastError = true)]
     internal static extern CONFIGRET CM_Get_Sibling(ref uint pdnDevInst, uint DevInst, int ulFlags);
 
+
     [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern unsafe SP_DEVINFO_DATA* SetupDiGetClassDevsEx(
         ref Guid GuidClass,
@@ -173,14 +169,41 @@ internal class SafeMethods
     [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern unsafe bool SetupDiDestroyDeviceInfoList(SP_DEVINFO_DATA* devs);
 
-    [DllImport("setupapi.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-    public static extern unsafe bool SetupDiGetDeviceInfoListDetail(
+    [DllImport("setupapi.dll", SetLastError = true)]
+    public static extern unsafe bool SetupDiGetDeviceInfoListDetailW(
         SP_DEVINFO_DATA* devs,
-        SP_DEVINFO_LIST_DETAIL_DATA* spDevinfoListDetailData);
+        ref SP_DEVINFO_LIST_DETAIL_DATA_W spDevinfoListDetailDataW);
+
 
     [DllImport("setupapi.dll", SetLastError = true)]
-    public static extern unsafe bool SetupDiEnumDeviceInfo(
-        SP_DEVINFO_DATA* DeviceInfoSet,
-        uint MemberIndex,
-        ref SP_DEVINFO_DATA DeviceInfoData);
+    public static extern CONFIGRET CM_Get_Device_ID_Ex(
+        IntPtr devInfoDevInst,
+        [MarshalAs(UnmanagedType.LPWStr, SizeConst = 200)] ref string buffer,
+        int bufferLen,
+        uint flags,
+        IntPtr? remoteMachineHandle = null);
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    public static extern bool SetupDiSetClassInstallParams(
+        SafeFileHandle devs,
+        SP_DEVINFO_DATA devInfo,
+        SP_CLASSINSTALL_HEADER pcpClassInstallHeader,
+        uint u);
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    public static extern bool SetupDiCallClassInstaller(
+        int difPropertychange,
+        SafeFileHandle devs,
+        SP_DEVINFO_DATA devInfo);
+
+    [DllImport("setupapi.dll", SetLastError = true)]
+    public static extern bool SetupDiGetDeviceInstallParams(
+        SafeFileHandle devs,
+        SP_DEVINFO_DATA devInfo,
+        ref SP_DEVINSTALL_PARAMS devParams);
+
+
+    [DllImport("setupapi.dll", SetLastError=true)]
+    public static extern unsafe bool SetupDiEnumDeviceInfo(SP_DEVINFO_DATA* DeviceInfoSet, uint MemberIndex, ref SP_DEVINFO_DATA DeviceInfoData);
+
 }

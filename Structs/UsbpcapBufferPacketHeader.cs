@@ -1,7 +1,6 @@
 ﻿using System.Runtime.InteropServices;
-using UsbPcapLib.Enums;
 
-namespace UsbPcapLib.Structs;
+namespace UsbPcapDotNet;
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct UsbpcapBufferPacketHeader

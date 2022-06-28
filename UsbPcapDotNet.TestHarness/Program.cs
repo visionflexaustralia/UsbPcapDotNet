@@ -1,7 +1,7 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
-using UsbPcapLib;
-using UsbPcapLib.TestHarness;
+using UsbPcapDotNet;
+using UsbPcapDotNet.TestHarness;
 
 var filters = USBPcapClient.find_usbpcap_filters();
 

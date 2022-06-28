@@ -1,4 +1,4 @@
-﻿namespace UsbPcapLib.Structs;
+﻿namespace UsbPcapDotNet;
 
 public struct USBPCAP_IOCTL_SIZE
 {

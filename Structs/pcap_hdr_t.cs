@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib.Structs;
+namespace UsbPcapDotNet;
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct pcap_hdr_t
