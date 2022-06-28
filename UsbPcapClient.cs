@@ -64,7 +64,7 @@ namespace UsbPcapLib
       else
       {
         this._data.filter = filter;
-        this._data.ExitEvent = new EventWaitHandle(false, EventResetMode.ManualReset);
+        this._data.exit_event = new EventWaitHandle(false, EventResetMode.ManualReset);
         this._data.read_handle = this.create_filter_read_handle(this._data);
         if (this._data.read_handle == IntPtr.Zero)
         {
@@ -77,6 +77,39 @@ namespace UsbPcapLib
         }.Start(this._data);
       }
     }
+
+    private unsafe IntPtr descriptors_generate_pcap(string filter, ref int pcap_length, USBPCAP_ADDRESS_FILTER addresses)
+    {
+        int pcap_packets_length = 0;
+        descriptor_callback_context ctx = new descriptor_callback_context();
+        ctx.head = null;
+        ctx.tail = null;
+
+        enumerate_all_connected_devices();
+
+        this.generate_pcap_packets(ctx.head, ref pcap_packets_length);
+    }
+
+    public unsafe delegate void descriptor_callback(
+        IntPtr hub,
+        ulong port,
+        ushort deviceAddress,
+        USB_DEVICE_DESCRIPTOR desc,
+        descriptor_callback_context* context);
+
+    private void enumerate_all_connected_devices(
+        string filter,
+        descriptor_callback callback,
+        ref descriptor_callback_context ctx)
+    {
+
+    }
+
+    private unsafe IntPtr generate_pcap_packets(list_entry* ctxHead, ref int pcapPacketsLength)
+    {
+        throw new NotImplementedException();
+    }
+
 
     private void read_thread(object obj)
     {
@@ -147,7 +180,7 @@ namespace UsbPcapLib
       }
       finally
       {
-        data.ExitEvent?.Set();
+        data.exit_event?.Set();
       }
     }
 
@@ -177,7 +210,7 @@ namespace UsbPcapLib
       }
     }
 
-    public void wait_for_exit_signal() => this._data.ExitEvent?.WaitOne();
+    public void wait_for_exit_signal() => this._data.exit_event?.WaitOne();
 
         public unsafe IntPtr create_filter_read_handle(ThreadData data)
         {
@@ -896,9 +929,9 @@ namespace UsbPcapLib
 
     public void Dispose()
     {
-      if (this._data.ExitEvent != null)
+      if (this._data.exit_event != null)
       {
-          this._data.ExitEvent.Close();
+          this._data.exit_event.Close();
       }
 
       if (!(this._data.read_handle != IntPtr.Zero))
