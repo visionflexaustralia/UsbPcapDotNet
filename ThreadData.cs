@@ -21,7 +21,6 @@ public struct ThreadData
     /// </summary>
     public string address_list;
 
-
     /// <summary>
     /// Addresses that should be filtered
     /// </summary>
@@ -35,22 +34,22 @@ public struct ThreadData
     /// <summary>
     /// TRUE if we should automatically capture from new devices.
     /// </summary>
-    public bool capture_new = true;
+    public bool capture_new;
 
     /// <summary>
     /// Snapshot length
     /// </summary>
-    public uint snaplen = SafeMethods.DEFAULT_SNAPSHOT_LENGTH;
+    public uint snaplen;
 
     /// <summary>
     ///  Internal kernel-mode buffer size
     /// </summary>
-    public uint bufferlen = SafeMethods.DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
+    public uint bufferlen;
 
     /// <summary>
     /// FALSE if thread should stop
     /// </summary>
-    public volatile bool process = true;
+    public volatile bool process;
 
     /// <summary>
     /// Handle to read data from.
@@ -82,7 +81,32 @@ public struct ThreadData
     /// </summary>
     public bool inject_descriptors;
 
-    public c descriptors;
+    public inject_descriptors descriptors;
+
+    /// <summary>
+    /// I have no idea what this does
+    /// </summary>
+    public bool pcapHeaderReadEver;
+
+    public ThreadData(string device)
+    {
+        this.device = device;
+        this.filter = new();
+        this.address_list = string.Empty;
+        this.snaplen = SafeMethods.DEFAULT_SNAPSHOT_LENGTH;
+        this.filename = "";
+        this.capture_new = true;
+        this.bufferlen = SafeMethods.DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
+        this.process = true;
+        this.capture_all = true;
+        this.read_handle = default;
+        this.write_handle = default;
+        this.job_handle = default;
+        this.worker_process_thread = default;
+        this.exit_event = null;
+        this.inject_descriptors = false;
+        this.descriptors = default;
+    }
 }
 
 [StructLayout(LayoutKind.Sequential)]

@@ -85,9 +85,11 @@ namespace UsbPcapLib
         ctx.head = null;
         ctx.tail = null;
 
-        enumerate_all_connected_devices();
+        enumerate_all_connected_devices(null!, null!, null);
 
         this.generate_pcap_packets(ctx.head, ref pcap_packets_length);
+
+        return IntPtr.Zero;
     }
 
     public unsafe delegate void descriptor_callback(
@@ -97,10 +99,10 @@ namespace UsbPcapLib
         USB_DEVICE_DESCRIPTOR desc,
         descriptor_callback_context* context);
 
-    private void enumerate_all_connected_devices(
+    private unsafe void enumerate_all_connected_devices(
         string filter,
         descriptor_callback callback,
-        ref descriptor_callback_context ctx)
+        descriptor_callback_context* ctx)
     {
 
     }
@@ -253,7 +255,7 @@ namespace UsbPcapLib
                 }
 
                 nativeOverlapped = new NativeOverlapped();
-                fixed (USBPCAP_ADDRESS_FILTER* pFilter = &(data.filter))
+                fixed (USBPCAP_ADDRESS_FILTER* pFilter = data.filter)
                 {
                     inBufSize = (uint)sizeof(USBPCAP_ADDRESS_FILTER);
                     success = SafeMethods.DeviceIoControl(safeFilterHandle, SafeMethods.IOCTL_USBPCAP_START_FILTERING, (IntPtr)pFilter, inBufSize, IntPtr.Zero, 0, out bytes_ret, ref nativeOverlapped);
