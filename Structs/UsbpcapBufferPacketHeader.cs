@@ -1,11 +1,11 @@
 ﻿using System.Runtime.InteropServices;
 using UsbPcapLib.Enums;
 
-namespace UsbPcapLib.Structs
+namespace UsbPcapLib.Structs;
+
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct UsbpcapBufferPacketHeader
 {
-  [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  public struct UsbpcapBufferPacketHeader
-  {
     public ushort headerLen;
     public ulong irpId;
     public USBD_STATUS status;
@@ -22,5 +22,4 @@ namespace UsbPcapLib.Structs
     public bool In => (this.endpoint & 128) == 128;
 
     public IRPDierction IrpDirection => (this.info & 1) == 0 ? IRPDierction.FDO_TO_PDO : IRPDierction.PDO_TO_FDO;
-  }
 }

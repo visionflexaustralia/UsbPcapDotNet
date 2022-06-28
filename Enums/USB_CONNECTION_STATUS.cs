@@ -1,7 +1,7 @@
-﻿namespace UsbPcapLib.Enums
+﻿namespace UsbPcapLib.Enums;
+
+public enum USB_CONNECTION_STATUS
 {
-  public enum USB_CONNECTION_STATUS
-  {
     NoDeviceConnected,
     DeviceConnected,
     DeviceFailedEnumeration,
@@ -12,6 +12,5 @@
     DeviceHubNestedTooDeeply,
     DeviceInLegacyHub,
     DeviceEnumerating,
-    DeviceReset,
-  }
+    DeviceReset
 }

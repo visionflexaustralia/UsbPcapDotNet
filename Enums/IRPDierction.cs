@@ -1,8 +1,7 @@
-﻿namespace UsbPcapLib.Enums
+﻿namespace UsbPcapLib.Enums;
+
+public enum IRPDierction
 {
-  public enum IRPDierction
-  {
     FDO_TO_PDO,
-    PDO_TO_FDO,
-  }
+    PDO_TO_FDO
 }

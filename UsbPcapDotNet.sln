@@ -1,8 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UsbPcapLib", "UsbPcapLib.csproj", "{FA4C17BD-451A-4B73-966C-F52B46B49F65}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UsbPcapDotNet", "UsbPcapDotNet.csproj", "{FA4C17BD-451A-4B73-966C-F52B46B49F65}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UsbPcapLib.TestHarness", "UsbPcapLib.TestHarness\UsbPcapLib.TestHarness.csproj", "{03CA2F54-CA4A-4A58-9B2C-3C1307A15DDD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UsbPcapDotNet.TestHarness", "UsbPcapDotNet.TestHarness\UsbPcapDotNet.TestHarness.csproj", "{03CA2F54-CA4A-4A58-9B2C-3C1307A15DDD}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

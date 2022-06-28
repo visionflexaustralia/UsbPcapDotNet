@@ -1,7 +1,6 @@
-﻿namespace UsbPcapLib.Enums
+﻿namespace UsbPcapLib.Enums;
+
+public enum DIRECTORY_ACCESS
 {
-  public enum DIRECTORY_ACCESS
-  {
-    DIRECTORY_QUERY = 1,
-  }
+    DIRECTORY_QUERY = 1
 }

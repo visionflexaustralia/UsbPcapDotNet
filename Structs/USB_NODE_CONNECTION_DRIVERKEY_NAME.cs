@@ -1,9 +1,8 @@
-﻿namespace UsbPcapLib.Structs
+﻿namespace UsbPcapLib.Structs;
+
+public struct USB_NODE_CONNECTION_DRIVERKEY_NAME
 {
-  public struct USB_NODE_CONNECTION_DRIVERKEY_NAME
-  {
     public uint ConnectionIndex;
     public uint ActualLength;
     public unsafe fixed char DriverKeyName[1];
-  }
 }

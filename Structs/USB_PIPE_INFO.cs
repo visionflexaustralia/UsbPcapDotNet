@@ -1,11 +1,10 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace UsbPcapLib.Structs
+namespace UsbPcapLib.Structs;
+
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct USB_PIPE_INFO
 {
-  [StructLayout(LayoutKind.Sequential, Pack = 1)]
-  public struct USB_PIPE_INFO
-  {
     public USB_ENDPOINT_DESCRIPTOR EndpointDescriptor;
     public uint ScheduleOffset;
-  }
 }

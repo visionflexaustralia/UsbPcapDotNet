@@ -1,8 +1,7 @@
-﻿namespace UsbPcapLib.Enums
+﻿namespace UsbPcapLib.Enums;
+
+public enum USB_HUB_NODE
 {
-  public enum USB_HUB_NODE
-  {
     UsbHub,
-    UsbMIParent,
-  }
+    UsbMIParent
 }

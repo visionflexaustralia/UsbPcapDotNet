@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net6.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <LangVersion>latest</LangVersion>
+        <RepositoryType>git</RepositoryType>
+        <RepositoryUrl>https://github.com/visionflexaustralia/UsbPcapDotNet/</RepositoryUrl>
+        <Authors>Visionflex Australia</Authors>
+        <Company>Visionflex Australia</Company>
+        <PackageId>UsbPcapDotNet</PackageId>
+        <Version>0.1.4</Version>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <Description>Updated Version of USBPcapLib with more features</Description>
+        <PackageTags>USBPcap wireshark usb sniff capture</PackageTags>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Remove="UsbPcapDotNet.TestHarness\**"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Remove="UsbPcapDotNet.TestHarness\**"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Remove="UsbPcapDotNet.TestHarness\**"/>
+    </ItemGroup>
+
+</Project>
