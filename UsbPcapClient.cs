@@ -298,19 +298,17 @@ public class USBPcapClient : IDisposable
             }
 
             nativeOverlapped = new NativeOverlapped();
-            fixed (USBPCAP_ADDRESS_FILTER* pFilter = data.filter)
-            {
-                inBufSize = (uint)sizeof(USBPCAP_ADDRESS_FILTER);
-                success = SafeMethods.DeviceIoControl(
-                    safeFilterHandle,
-                    SafeMethods.IOCTL_USBPCAP_START_FILTERING,
-                    (IntPtr)pFilter,
-                    inBufSize,
-                    IntPtr.Zero,
-                    0,
-                    out bytes_ret,
-                    ref nativeOverlapped);
-            }
+            inBufSize = (uint)sizeof(USBPCAP_ADDRESS_FILTER);
+            success = SafeMethods.DeviceIoControl(
+                safeFilterHandle,
+                SafeMethods.IOCTL_USBPCAP_START_FILTERING,
+                (IntPtr)(&data.filter),
+                inBufSize,
+                IntPtr.Zero,
+                0,
+                out bytes_ret,
+                ref nativeOverlapped);
+
 
             if (success == false)
             {
