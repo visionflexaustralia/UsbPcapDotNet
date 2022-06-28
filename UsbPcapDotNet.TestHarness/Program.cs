@@ -21,10 +21,15 @@ foreach (var filter in filters)
 
 Console.WriteLine($"Choosing Filter: {primary.filterId} ");
 
+
 var client = new USBPcapClient(primary.filterId);
 
 client.DataRead += (sender, eventArgs) =>
 {
+
+    Console.WriteLine( $"DATA READ Device:'{eventArgs.Header.device}'" + $" in?:{eventArgs.Header.In} " + $"func:'{eventArgs.Header.function}' "
+                     + $"len: {eventArgs.Data.Length} ");
+
     if (eventArgs.Data.Length > 100)
     {
         Console.WriteLine(

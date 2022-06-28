@@ -6,13 +6,15 @@
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <LangVersion>latest</LangVersion>
+        <RepositoryType>git</RepositoryType>
         <RepositoryUrl>https://github.com/visionflexaustralia/UsbPcapDotNet/</RepositoryUrl>
-        <Authors>Visionflex</Authors>
+        <Authors>Visionflex Australia</Authors>
         <Company>Visionflex Australia</Company>
         <PackageId>UsbPcapDotNet</PackageId>
-        <Version>0.1.3</Version>
+        <Version>0.1.4</Version>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <Description>Updated Version of USBPcapLib with more features</Description>
+        <PackageTags>USBPcap wireshark usb sniff capture</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
