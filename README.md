@@ -1,4 +1,4 @@
-# UsbPcapLib
+# UsbPcapDotNet
 
 C# (.NET 6+) binding of [USBPcap](https://github.com/desowin/usbpcap) (specifically USBPcapCMD)
 
