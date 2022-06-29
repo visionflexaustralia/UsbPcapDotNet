@@ -3,6 +3,7 @@
 
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Xml.Serialization;
 using Microsoft.Win32.SafeHandles;
 using static Microsoft.Win32.Registry;
 
@@ -10,12 +11,21 @@ namespace UsbPcapDotNet;
 
 public class USBPcapClient : IDisposable
 {
-    public unsafe delegate void descriptor_callback(
-        IntPtr hub,
+    public unsafe delegate void ConnectedPortCallback(
+        SafeFileHandle hub,
         ulong port,
         ushort deviceAddress,
         USB_DEVICE_DESCRIPTOR desc,
-        descriptor_callback_context* context);
+        port_descriptor_callback_context* context);
+
+    public unsafe delegate void DeviceInfoCallback(
+        ulong level,
+        ulong port,
+        string display,
+        ushort deviceAddress,
+        ushort parentAddress,
+        ulong node,
+        ulong parentNode);
 
     public const int DIGCF_ALLCLASSES = (0x00000004);
     public const int DIGCF_PRESENT = (0x00000002);
@@ -116,7 +126,7 @@ public class USBPcapClient : IDisposable
         USBPCAP_ADDRESS_FILTER addresses)
     {
         var pcap_packets_length = 0;
-        var ctx = new descriptor_callback_context();
+        var ctx = new port_descriptor_callback_context();
 
         // get the filter number
         var tmp = string.Empty;
@@ -137,23 +147,30 @@ public class USBPcapClient : IDisposable
         ctx.addresses = addresses;
         ctx.head = null;
         ctx.tail = null;
-        this.enumerate_all_connected_devices(filter, descriptor_callback_func, &ctx);
+        this.enumerate_all_connected_devices(filter, &descriptor_callback_func, &ctx);
 
-        this.generate_pcap_packets(ctx.head, &pcap_packets_length);
+        var pcap_packets = this.generate_pcap_packets(ctx.head, &pcap_packets_length);
 
-        return IntPtr.Zero;
+        pcap_length = pcap_packets_length;
+        return pcap_packets;
     }
 
-    private static unsafe void descriptor_callback_func(IntPtr hub, ulong port, ushort deviceAddress, USB_DEVICE_DESCRIPTOR desc, descriptor_callback_context* context)
+    [UnmanagedCallersOnly]
+    private static unsafe void descriptor_callback_func(IntPtr hub, ulong port, ushort deviceAddress, USB_DEVICE_DESCRIPTOR desc, port_descriptor_callback_context* context)
     {
 
     }
 
     private unsafe void enumerate_all_connected_devices(
         string filter,
-        descriptor_callback callback,
-        descriptor_callback_context* ctx)
-    { }
+        delegate* unmanaged<IntPtr, ulong, ushort, USB_DEVICE_DESCRIPTOR, port_descriptor_callback_context*, void> callback,
+        port_descriptor_callback_context* ctx)
+    {
+        var bytes_ret =
+
+        EnumerateHub(get_usbpcap_filter_hub_symlink(filter), null, 0, callback, ctx);
+
+    }
 
     static byte[] GetBytes<T>( T obj)
         where T : struct
@@ -474,7 +491,7 @@ public class USBPcapClient : IDisposable
         string hub,
         USB_NODE_CONNECTION_INFORMATION? connection_info,
         uint level,
-        StringBuilder output)
+        StringBuilder output, DeviceInfoCallback? print_callback = null, ConnectedPortCallback? port_callback = null, port_descriptor_callback_context? port_ctx = null)
     {
         var deviceName = string.Empty;
 
@@ -559,7 +576,10 @@ public class USBPcapClient : IDisposable
         byte NumPorts,
         uint level,
         ushort hubAddress,
-        StringBuilder output)
+        StringBuilder output,
+        DeviceInfoCallback? print_callback = null,
+        ConnectedPortCallback? port_callback = null,
+        port_descriptor_callback_context? ctx = null)
     {
         for (uint index = 1; index <= NumPorts; ++index)
         {
@@ -588,10 +608,21 @@ public class USBPcapClient : IDisposable
                         !connectionInformation.DeviceIsHub,
                         connectionInformation.DeviceAddress,
                         hubAddress,
-                        output);
+                        output, print_callback);
                 }
 
                 var connectionStatus = (int)connectionInformation.ConnectionStatus;
+
+                if (connectionInformation.ConnectionStatus == USB_CONNECTION_STATUS.DeviceConnected && port_callback != null)
+                {
+                    port_callback(
+                        hHubDevice,
+                        index,
+                        connectionInformation.DeviceAddress,
+                        connectionInformation.DeviceDescriptor,
+                        ctx);
+                }
+
                 if (connectionInformation.DeviceIsHub)
                 {
                     var externalHubName = GetExternalHubName(hHubDevice, index);
@@ -714,7 +745,8 @@ public class USBPcapClient : IDisposable
         bool printAllChildren,
         ushort deviceAddress,
         ushort parentAddress,
-        StringBuilder output)
+        StringBuilder output,
+        DeviceInfoCallback? callback = null)
     {
         uint devInst = 0;
         uint devInstNext = 0;
@@ -767,11 +799,19 @@ public class USBPcapClient : IDisposable
                         {
                             var deviceDesc = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
 
-                            print_usbpcapcmd(Level, index, deviceDesc, deviceAddress, parentAddress, 0, 0, output);
+                            if (callback != null)
+                            {
+                                callback(Level, index, deviceDesc, deviceAddress, parentAddress, 0, 0);
+                            }
+                            else
+                            {
+                                // TODO: use callback
+                                print_usbpcapcmd(Level, index, deviceDesc, deviceAddress, parentAddress, 0, 0, output);
+                            }
 
                             if (printAllChildren)
                             {
-                                PrintDevinstChildren(devInst, Level, deviceAddress, output);
+                                PrintDevinstChildren(devInst, Level, deviceAddress, output, callback);
                             }
                         }
                     }
@@ -840,7 +880,7 @@ public class USBPcapClient : IDisposable
         }
     }
 
-    private static void PrintDevinstChildren(uint parent, uint indent, ushort deviceAddress, StringBuilder output)
+    private static void PrintDevinstChildren(uint parent, uint indent, ushort deviceAddress, StringBuilder output, DeviceInfoCallback? callback = null)
     {
         uint next = 0;
         var current = parent;
@@ -904,7 +944,14 @@ public class USBPcapClient : IDisposable
                         }
                     }
 
-                    print_usbpcapcmd(level, 0, deviceDesc, deviceAddress, deviceAddress, nextNode, parentNode, output);
+                    if (callback != null)
+                    {
+                        callback(level, 0, deviceDesc, deviceAddress, deviceAddress, nextNode, parentNode);
+                    }
+                    else
+                    {
+                        print_usbpcapcmd(level, 0, deviceDesc, deviceAddress, deviceAddress, nextNode, parentNode, output);
+                    }
                 }
 
                 // Go down a level to the first next.
