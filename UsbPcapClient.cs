@@ -147,7 +147,7 @@ public class USBPcapClient : IDisposable
         ctx.addresses = addresses;
         ctx.head = null;
         ctx.tail = null;
-        this.enumerate_all_connected_devices(filter, &descriptor_callback_func, &ctx);
+        this.enumerate_all_connected_devices(filter, descriptor_callback_func, &ctx);
 
         var pcap_packets = this.generate_pcap_packets(ctx.head, &pcap_packets_length);
 
@@ -155,21 +155,17 @@ public class USBPcapClient : IDisposable
         return pcap_packets;
     }
 
-    [UnmanagedCallersOnly]
-    private static unsafe void descriptor_callback_func(IntPtr hub, ulong port, ushort deviceAddress, USB_DEVICE_DESCRIPTOR desc, port_descriptor_callback_context* context)
+    private static unsafe void descriptor_callback_func(SafeFileHandle safeFileHandle, ulong port, ushort deviceAddress, USB_DEVICE_DESCRIPTOR desc, port_descriptor_callback_context* context)
     {
 
     }
 
     private unsafe void enumerate_all_connected_devices(
         string filter,
-        delegate* unmanaged<IntPtr, ulong, ushort, USB_DEVICE_DESCRIPTOR, port_descriptor_callback_context*, void> callback,
+        ConnectedPortCallback callback,
         port_descriptor_callback_context* ctx)
     {
-        var bytes_ret =
-
-        EnumerateHub(get_usbpcap_filter_hub_symlink(filter), null, 0, callback, ctx);
-
+        EnumerateHub(get_usbpcap_filter_hub_symlink(filter), null, 0, new StringBuilder(), null, callback, *ctx);
     }
 
     static byte[] GetBytes<T>( T obj)
@@ -579,7 +575,7 @@ public class USBPcapClient : IDisposable
         StringBuilder output,
         DeviceInfoCallback? print_callback = null,
         ConnectedPortCallback? port_callback = null,
-        port_descriptor_callback_context? ctx = null)
+        port_descriptor_callback_context* ctx = null)
     {
         for (uint index = 1; index <= NumPorts; ++index)
         {
@@ -1071,7 +1067,7 @@ public class USBPcapClient : IDisposable
         }
     }
 
-    private static string? get_usbpcap_filter_hub_symlink(string filter)
+    private static string get_usbpcap_filter_hub_symlink(string filter)
     {
         var file = SafeMethods.CreateFile(
             filter,
@@ -1107,7 +1103,7 @@ public class USBPcapClient : IDisposable
                     out var _,
                     ref overlap)
                     ? string.Empty
-                    : Marshal.PtrToStringUni(gcHandle.AddrOfPinnedObject());
+                    : Marshal.PtrToStringUni(gcHandle.AddrOfPinnedObject())!;
             }
             finally
             {
