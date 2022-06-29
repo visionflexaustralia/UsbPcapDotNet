@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
@@ -108,6 +109,10 @@ internal class SafeMethods
         uint nOutBufferSize,
         out uint bytesReturned,
         [In] ref NativeOverlapped Overlapped);
+
+    [DllImport("kernel32.dll")]
+    public static extern void GetSystemTimeAsFileTime(out FILETIME
+        lpSystemTimeAsFileTime);
 
     [DllImport("setupapi.dll", SetLastError = true)]
     internal static extern CONFIGRET CM_Locate_DevNodeA(ref uint pdnDevInst, string? pDeviceID, int ulFlags);

@@ -3,8 +3,8 @@
 
 using System.Runtime.InteropServices;
 using System.Text;
-using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
+using static Microsoft.Win32.Registry;
 
 namespace UsbPcapDotNet;
 
@@ -117,14 +117,36 @@ public class USBPcapClient : IDisposable
     {
         var pcap_packets_length = 0;
         var ctx = new descriptor_callback_context();
+
+        // get the filter number
+        var tmp = string.Empty;
+        var skip = 0;
+        ushort targetFilterNum = 0;
+        do
+        {
+            tmp = filter[skip..];
+
+            if (ushort.TryParse(tmp, out var result))
+            {
+                targetFilterNum = result;
+            }
+        } while (targetFilterNum == 0);
+
+
+        ctx.roothub = targetFilterNum;
+        ctx.addresses = addresses;
         ctx.head = null;
         ctx.tail = null;
+        this.enumerate_all_connected_devices(filter, descriptor_callback_func, &ctx);
 
-        this.enumerate_all_connected_devices(null!, null!, null);
-
-        this.generate_pcap_packets(ctx.head, ref pcap_packets_length);
+        this.generate_pcap_packets(ctx.head, &pcap_packets_length);
 
         return IntPtr.Zero;
+    }
+
+    private static unsafe void descriptor_callback_func(IntPtr hub, ulong port, ushort deviceAddress, USB_DEVICE_DESCRIPTOR desc, descriptor_callback_context* context)
+    {
+
     }
 
     private unsafe void enumerate_all_connected_devices(
@@ -133,11 +155,66 @@ public class USBPcapClient : IDisposable
         descriptor_callback_context* ctx)
     { }
 
-    private unsafe IntPtr generate_pcap_packets(list_entry* ctxHead, ref int pcapPacketsLength)
+    static byte[] GetBytes<T>( T obj)
+        where T : struct
     {
-        throw new NotImplementedException();
+        var size = Marshal.SizeOf(obj);
+        var arr = new byte[size];
+
+        var ptr = IntPtr.Zero;
+        try
+        {
+            ptr = Marshal.AllocHGlobal(size);
+            Marshal.StructureToPtr(obj, ptr, true);
+            Marshal.Copy(ptr, arr, 0, size);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(ptr);
+        }
+        return arr;
     }
 
+    private unsafe IntPtr generate_pcap_packets(list_entry* ctxHead, int* out_len)
+    {
+        var totalLength = 0;
+        list_entry* e;
+
+        // UINT8
+
+        for (e = ctxHead; (IntPtr)e != IntPtr.Zero; e = e->next)
+        {
+            totalLength += Marshal.SizeOf<pcaprec_hdr_t>();
+            totalLength += e->length;
+        }
+
+        *out_len = totalLength;
+        var pcap = Marshal.AllocHGlobal(totalLength);
+        var offset = 0;
+
+        for (e = ctxHead; (IntPtr)e != IntPtr.Zero; e = e->next)
+        {
+            var timestamp = new ULARGE_INTEGER();
+            var hdr = new pcaprec_hdr_t();
+            SafeMethods.GetSystemTimeAsFileTime(out var ts);
+
+            timestamp.LowPartAsInt = ts.dwLowDateTime;
+            timestamp.HighPartAsInt = ts.dwHighDateTime;
+
+            hdr.ts_sec = (uint)(timestamp.QuadPart/10000000-11644473600);
+            hdr.ts_usec = (uint)((timestamp.QuadPart%10000000)/10);
+            hdr.incl_len = (uint)e->length;
+            hdr.orig_len = (uint)e->length;
+
+            Marshal.Copy(GetBytes(hdr), 0, (&pcap)[offset], Marshal.SizeOf<pcaprec_hdr_t>());
+            offset += Marshal.SizeOf<pcaprec_hdr_t>();
+
+            Marshal.Copy(GetBytes(e->data), 0, (&pcap)[offset], e->length);
+            offset += e->length;
+        }
+
+        return pcap;
+    }
 
     private void read_thread(object obj)
     {
@@ -221,28 +298,24 @@ public class USBPcapClient : IDisposable
 
     private unsafe void process_data(ThreadData data, byte[] buffer, uint read)
     {
-        using (var input = new MemoryStream(buffer, 0, (int)read))
+        using var input = new MemoryStream(buffer, 0, (int)read);
+        using var br = new BinaryReader(input);
+        if (!data.pcapHeaderReadEver)
         {
-            using (var br = new BinaryReader(input))
-            {
-                if (!data.pcapHeaderReadEver)
-                {
-                    pcap_hdr_t pcapHdrT;
-                    br.TryRead(out pcapHdrT);
-                    this.OnHeaderRead(pcapHdrT);
-                    data.pcapHeaderReadEver = true;
-                }
+            pcap_hdr_t pcapHdrT;
+            br.TryRead(out pcapHdrT);
+            this.OnHeaderRead(pcapHdrT);
+            data.pcapHeaderReadEver = true;
+        }
 
-                pcaprec_hdr_t pcaprecHdrT;
-                UsbpcapBufferPacketHeader packet;
-                while (br.TryRead(out pcaprecHdrT) && br.TryRead(out packet))
-                {
-                    var num = sizeof(UsbpcapBufferPacketHeader);
-                    var count = (int)pcaprecHdrT.incl_len - num;
-                    var data1 = br.ReadBytes(count);
-                    this.OnDataRead(pcaprecHdrT, packet, data1);
-                }
-            }
+        pcaprec_hdr_t pcaprecHdrT;
+        UsbpcapBufferPacketHeader packet;
+        while (br.TryRead(out pcaprecHdrT) && br.TryRead(out packet))
+        {
+            var num = sizeof(UsbpcapBufferPacketHeader);
+            var count = (int)pcaprecHdrT.incl_len - num;
+            var data1 = br.ReadBytes(count);
+            this.OnDataRead(pcaprecHdrT, packet, data1);
         }
     }
 
@@ -1002,31 +1075,21 @@ public class USBPcapClient : IDisposable
 
     public static bool is_usbpcap_upper_filter_installed()
     {
-        using (var registryKey = Registry.LocalMachine.OpenSubKey(
-                   "System\\CurrentControlSet\\Control\\Class\\{36FC9E60-C465-11CF-8056-444553540000}"))
+        using var registryKey = LocalMachine.OpenSubKey(
+            "System\\CurrentControlSet\\Control\\Class\\{36FC9E60-C465-11CF-8056-444553540000}");
+        if (registryKey == null)
         {
-            if (registryKey == null)
-            {
-                Console.WriteLine("Failed to open USB Class registry key!");
-                return false;
-            }
-
-            if (!(registryKey.GetValue("UpperFilters", null) is string[] strArray))
-            {
-                Console.WriteLine("Failed to query UpperFilters value size!");
-                return false;
-            }
-
-            for (var index = 0; index < strArray.Length; ++index)
-            {
-                if (strArray[index] == "USBPcap")
-                {
-                    return true;
-                }
-            }
+            Console.WriteLine("Failed to open USB Class registry key!");
+            return false;
         }
 
-        return false;
+        if (!(registryKey.GetValue("UpperFilters", null) is string[] strArray))
+        {
+            Console.WriteLine("Failed to query UpperFilters value size!");
+            return false;
+        }
+
+        return strArray.Any(t => t == "USBPcap");
     }
 
     public static List<string> find_usbpcap_filters()
