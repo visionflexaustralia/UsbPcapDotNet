@@ -48,28 +48,28 @@ public class USBPcapClient : IDisposable
     public const uint ERROR_ELEMENT_NOT_FOUND = 1168;
 
     public const int BUFFER_SIZE = 4096;
-    private ThreadData _data;
+    private ThreadData data;
     private readonly int _filterDeviceId;
 
     public USBPcapClient(string filter, int filterDeviceId = 0)
     {
         this._filterDeviceId = filterDeviceId;
-        this._data = new ThreadData(filter);
+        this.data = new ThreadData(filter);
     }
 
     public void Dispose()
     {
-        if (this._data.exit_event != null)
+        if (this.data.exit_event != null)
         {
-            this._data.exit_event.Close();
+            this.data.exit_event.Close();
         }
 
-        if (!(this._data.read_handle != IntPtr.Zero))
+        if (!(this.data.read_handle != IntPtr.Zero))
         {
             return;
         }
 
-        SafeMethods.CloseHandle(this._data.read_handle);
+        SafeMethods.CloseHandle(this.data.read_handle);
     }
 
     public event EventHandler<HeaderEventArgs>? HeaderRead;
@@ -107,15 +107,25 @@ public class USBPcapClient : IDisposable
         }
         else
         {
-            this._data.filter = filter;
-            this._data.exit_event = new EventWaitHandle(false, EventResetMode.ManualReset);
-            this._data.read_handle = this.create_filter_read_handle(this._data);
-            if (this._data.read_handle == IntPtr.Zero)
+            this.data.filter = filter;
+            this.data.exit_event = new EventWaitHandle(false, EventResetMode.ManualReset);
+
+            if (this.data.inject_descriptors)
+            {
+                this.data.descriptors.descriptors = descriptors_generate_pcap(
+                    this.data.device,
+                    ref this.data.descriptors.descriptors_len,
+                    this.data.filter);
+                this.data.descriptors.buf_written = 0;
+            }
+
+            this.data.read_handle = this.create_filter_read_handle(this.data);
+            if (this.data.read_handle == IntPtr.Zero)
             {
                 return;
             }
 
-            new Thread(this.read_thread!) { IsBackground = true }.Start(this._data);
+            new Thread(this.read_thread!) { IsBackground = true }.Start(this.data);
         }
     }
 
@@ -194,11 +204,18 @@ public class USBPcapClient : IDisposable
                 false);
 
             /* SET CONFIGURATION */
-            write_setup_packet(ctx, URB_SELECT_CONFIGURATION, deviceAddress,
-                0x00, 9, config.bConfigurationValue, 0, 0, true);
+            write_setup_packet(
+                ctx,
+                URB_SELECT_CONFIGURATION,
+                deviceAddress,
+                0x00,
+                9,
+                config.bConfigurationValue,
+                0,
+                0,
+                true);
 
-            write_complete_packet(ctx, URB_SELECT_CONFIGURATION, deviceAddress,
-                null, 0, true);
+            write_complete_packet(ctx, URB_SELECT_CONFIGURATION, deviceAddress, null, 0, true);
         }
     }
 
@@ -206,9 +223,9 @@ public class USBPcapClient : IDisposable
         port_descriptor_callback_context* ctx,
         ushort function,
         ushort deviceAddress,
-        byte  bmRequestType,
-        byte  bRequest,
-        ushort wValue ,
+        byte bmRequestType,
+        byte bRequest,
+        ushort wValue,
         int wIndex,
         int wLength,
         bool @out)
@@ -216,7 +233,6 @@ public class USBPcapClient : IDisposable
         throw new NotImplementedException();
         initialize_control_header();
         add_to_list();
-
     }
 
 
@@ -447,7 +463,7 @@ public class USBPcapClient : IDisposable
 
     public void wait_for_exit_signal()
     {
-        this._data.exit_event?.WaitOne();
+        this.data.exit_event?.WaitOne();
     }
 
     public unsafe IntPtr create_filter_read_handle(ThreadData data)
@@ -750,7 +766,6 @@ public class USBPcapClient : IDisposable
                 if (connectionInformation.ConnectionStatus == USB_CONNECTION_STATUS.DeviceConnected
                  && port_callback != null && ctx != null)
                 {
-
                     port_callback(
                         hHubDevice,
                         index,
