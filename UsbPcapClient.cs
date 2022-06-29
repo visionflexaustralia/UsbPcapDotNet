@@ -16,7 +16,7 @@ public class USBPcapClient : IDisposable
         ulong port,
         ushort deviceAddress,
         USB_DEVICE_DESCRIPTOR desc,
-        port_descriptor_callback_context* context);
+        port_descriptor_callback_context context);
 
     public unsafe delegate void DeviceInfoCallback(
         ulong level,
@@ -155,7 +155,7 @@ public class USBPcapClient : IDisposable
         return pcap_packets;
     }
 
-    private static unsafe void descriptor_callback_func(SafeFileHandle safeFileHandle, ulong port, ushort deviceAddress, USB_DEVICE_DESCRIPTOR desc, port_descriptor_callback_context* context)
+    private static unsafe void descriptor_callback_func(SafeFileHandle safeFileHandle, ulong port, ushort deviceAddress, USB_DEVICE_DESCRIPTOR desc, port_descriptor_callback_context portDescriptorCallbackContext)
     {
 
     }
@@ -165,7 +165,11 @@ public class USBPcapClient : IDisposable
         ConnectedPortCallback callback,
         port_descriptor_callback_context* ctx)
     {
-        EnumerateHub(get_usbpcap_filter_hub_symlink(filter), null, 0, new StringBuilder(), null, callback, *ctx);
+        var hub = get_usbpcap_filter_hub_symlink(filter);
+        if (hub.Length > 0)
+        {
+            EnumerateHub(hub, null, 0, new StringBuilder(), null, callback, *ctx);
+        }
     }
 
     static byte[] GetBytes<T>( T obj)
@@ -487,7 +491,10 @@ public class USBPcapClient : IDisposable
         string hub,
         USB_NODE_CONNECTION_INFORMATION? connection_info,
         uint level,
-        StringBuilder output, DeviceInfoCallback? print_callback = null, ConnectedPortCallback? port_callback = null, port_descriptor_callback_context? port_ctx = null)
+        StringBuilder output,
+        DeviceInfoCallback? print_callback = null,
+        ConnectedPortCallback? port_callback = null,
+        port_descriptor_callback_context? port_ctx = null)
     {
         var deviceName = string.Empty;
 
@@ -549,12 +556,18 @@ public class USBPcapClient : IDisposable
 
             var hubInfo = Marshal.PtrToStructure<USB_NODE_INFORMATION>(pHubInfo);
 
-            EnumerateHubPorts(
-                safeFileHandle,
-                hubInfo.HubInformation.HubDescriptor.bNumberOfPorts,
-                level,
-                connection_info.HasValue == false ? (ushort)0 : connection_info.Value.DeviceAddress,
-                output);
+            if (port_ctx != null)
+            {
+                EnumerateHubPorts(
+                    safeFileHandle,
+                    hubInfo.HubInformation.HubDescriptor.bNumberOfPorts,
+                    level,
+                    connection_info.HasValue == false ? (ushort)0 : connection_info.Value.DeviceAddress,
+                    output,
+                    print_callback,
+                    port_callback,
+                    port_ctx);
+            }
         }
         finally
         {
@@ -575,7 +588,7 @@ public class USBPcapClient : IDisposable
         StringBuilder output,
         DeviceInfoCallback? print_callback = null,
         ConnectedPortCallback? port_callback = null,
-        port_descriptor_callback_context* ctx = null)
+        port_descriptor_callback_context? ctx = null)
     {
         for (uint index = 1; index <= NumPorts; ++index)
         {
@@ -611,12 +624,13 @@ public class USBPcapClient : IDisposable
 
                 if (connectionInformation.ConnectionStatus == USB_CONNECTION_STATUS.DeviceConnected && port_callback != null)
                 {
+                    ArgumentNullException.ThrowIfNull(ctx);
                     port_callback(
                         hHubDevice,
                         index,
                         connectionInformation.DeviceAddress,
                         connectionInformation.DeviceDescriptor,
-                        ctx);
+                        ctx.Value);
                 }
 
                 if (connectionInformation.DeviceIsHub)
