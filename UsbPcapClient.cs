@@ -220,6 +220,11 @@ public class USBPcapClient : IDisposable
     }
 
     private const int USBPCAP_CONTROL_STAGE_SETUP = 0;
+    private unsafe void write_complete_packet(port_descriptor_callback_context* ctx, URB_FUNCTION function, ushort deviceAddress, void* payload, int payload_length, bool @out)
+    {
+        throw new NotImplementedException();
+    }
+
 
     private unsafe void write_setup_packet(
         port_descriptor_callback_context* ctx,
