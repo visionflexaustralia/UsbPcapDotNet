@@ -237,6 +237,11 @@ public class USBPcapClient : IDisposable
         }
     }
 
+    private object get_config_descriptor(SafeFileHandle hub, ulong port, int i)
+    {
+        throw new NotImplementedException();
+    }
+
     private unsafe void write_device_descriptor_complete(port_descriptor_callback_context* ctx, ushort deviceAddress, USB_DEVICE_DESCRIPTOR* descriptor)
     {
         var data_len = Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>() + 18;
@@ -277,7 +282,17 @@ public class USBPcapClient : IDisposable
 
     private unsafe void write_complete_packet(port_descriptor_callback_context* ctx, URB_FUNCTION function, ushort deviceAddress, void* payload, int payload_length, bool @out)
     {
-        throw new NotImplementedException();
+        var data_len = Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>() + payload_length;
+        var data = (USBPCAP_BUFFER_CONTROL_HEADER*)Marshal.AllocHGlobal(data_len);
+
+        var hdr = *data;
+
+        if (payload_length > 0)
+        {
+            Buffer.MemoryCopy(payload,&data[sizeof(USBPCAP_BUFFER_CONTROL_HEADER)],data_len, payload_length);
+        }
+
+        add_to_list(ctx, data, data_len);
     }
 
 
@@ -380,7 +395,7 @@ public class USBPcapClient : IDisposable
         var hub = get_usbpcap_filter_hub_symlink(filter);
         if (hub.Length > 0)
         {
-            EnumerateHub(hub, null, 0, new StringBuilder(), null, callback, *ctx);
+            EnumerateHub(hub, null, 0, new StringBuilder(), null, callback, ctx);
         }
     }
 
@@ -680,7 +695,7 @@ public class USBPcapClient : IDisposable
         return true;
     }
 
-    public static string enumerate_print_usbpcap_interactive(string filter, bool consoleOutput = false)
+    public static unsafe string enumerate_print_usbpcap_interactive(string filter, bool consoleOutput = false)
     {
         var output = new StringBuilder();
         var filterHubSymlink = get_usbpcap_filter_hub_symlink(filter);
@@ -722,7 +737,7 @@ public class USBPcapClient : IDisposable
         StringBuilder output,
         DeviceInfoCallback? print_callback = null,
         ConnectedPortCallback? port_callback = null,
-        port_descriptor_callback_context? port_ctx = null)
+        port_descriptor_callback_context* port_ctx = null)
     {
         var deviceName = string.Empty;
 
