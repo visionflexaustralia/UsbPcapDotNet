@@ -201,24 +201,24 @@ public class USBPcapClient : IDisposable
 
         if (request != null)
         {
-            var config = request.Data;
+            var config = (USB_CONFIGURATION_DESCRIPTOR*) request->Data;
             write_setup_packet(
                 ctx,
                 URB_FUNCTION.URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE,
                 deviceAddress,
-                request.SetupPacket.bmRquest,
-                request.SetupPacket.bRequest,
-                request.SetupPacket.wValue,
-                request.SetupPacket.wIndex,
-                request.SetupPacket.wLength,
+                request->SetupPacket.bmRequest,
+                request->SetupPacket.bRequest,
+                request->SetupPacket.wValue,
+                request->SetupPacket.wIndex,
+                request->SetupPacket.wLength,
                 false);
 
             write_complete_packet(
                 ctx,
                 URB_FUNCTION.URB_FUNCTION_CONTROL_TRANSFER,
                 deviceAddress,
-                request.Data,
-                request.SetupPacket.wLength,
+                request->Data,
+                request->SetupPacket.wLength,
                 false);
 
             /* SET CONFIGURATION */
@@ -228,7 +228,7 @@ public class USBPcapClient : IDisposable
                 deviceAddress,
                 0x00,
                 9,
-                config.bConfigurationValue,
+                config->bConfigurationValue,
                 0,
                 0,
                 true);
@@ -237,7 +237,7 @@ public class USBPcapClient : IDisposable
         }
     }
 
-    private object get_config_descriptor(SafeFileHandle hub, ulong port, int i)
+    private unsafe USB_DESCRIPTOR_REQUEST* get_config_descriptor(SafeFileHandle hub, ulong port, int i)
     {
         throw new NotImplementedException();
     }
