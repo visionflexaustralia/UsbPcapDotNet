@@ -440,21 +440,25 @@ public class USBPcapClient : IDisposable
         for (e = ctxHead; (IntPtr)e != IntPtr.Zero; e = e->next)
         {
             var timestamp = new ULARGE_INTEGER();
-            var hdr = new pcaprec_hdr_t();
+            var data_len = Marshal.SizeOf<pcaprec_hdr_t>();
+            var hdr = (pcaprec_hdr_t*)Marshal.AllocHGlobal(Marshal.SizeOf<pcaprec_hdr_t>());
+
             SafeMethods.GetSystemTimeAsFileTime(out var ts);
 
             timestamp.LowPartAsInt = ts.dwLowDateTime;
             timestamp.HighPartAsInt = ts.dwHighDateTime;
 
-            hdr.ts_sec = (uint)(timestamp.QuadPart / 10000000 - 11644473600);
-            hdr.ts_usec = (uint)((timestamp.QuadPart % 10000000) / 10);
-            hdr.incl_len = (uint)e->length;
-            hdr.orig_len = (uint)e->length;
+            hdr->ts_sec = (uint)(timestamp.QuadPart / 10000000 - 11644473600);
+            hdr->ts_usec = (uint)((timestamp.QuadPart % 10000000) / 10);
+            hdr->incl_len = (uint)e->length;
+            hdr->orig_len = (uint)e->length;
 
-            Marshal.Copy(GetBytes(hdr), 0, (&pcap)[offset], Marshal.SizeOf<pcaprec_hdr_t>());
+            Buffer.MemoryCopy(hdr, (void*)(&pcap)[offset], totalLength - offset, Marshal.SizeOf<pcaprec_hdr_t>());
+            //Marshal.Copy(GetBytes(hdr), 0, (&pcap)[offset], Marshal.SizeOf<pcaprec_hdr_t>());
             offset += Marshal.SizeOf<pcaprec_hdr_t>();
 
-            Marshal.Copy(GetBytes(e->data), 0, (&pcap)[offset], e->length);
+            Buffer.MemoryCopy((void*)e->data, (void*)(&pcap)[offset], totalLength - offset, e->length);
+            //Marshal.Copy(GetBytes(e->data), 0, (&pcap)[offset], e->length);
             offset += e->length;
         }
 
