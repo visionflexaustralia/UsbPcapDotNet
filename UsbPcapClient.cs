@@ -1,6 +1,7 @@
 ﻿// Taken from https://github.com/stjeong/usbpcap/tree/master/windows/USBPcapLib
 // LICENSE: MIT
 
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
@@ -201,7 +202,7 @@ public class USBPcapClient : IDisposable
 
         if (request != null)
         {
-            var config = (USB_CONFIGURATION_DESCRIPTOR*) request->Data;
+            var config = GetRequestData<USB_CONFIGURATION_DESCRIPTOR>(*request);
             write_setup_packet(
                 ctx,
                 URB_FUNCTION.URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE,
@@ -217,7 +218,7 @@ public class USBPcapClient : IDisposable
                 ctx,
                 URB_FUNCTION.URB_FUNCTION_CONTROL_TRANSFER,
                 deviceAddress,
-                request->Data,
+                &config,
                 request->SetupPacket.wLength,
                 false);
 
@@ -228,7 +229,7 @@ public class USBPcapClient : IDisposable
                 deviceAddress,
                 0x00,
                 9,
-                config->bConfigurationValue,
+                config.bConfigurationValue,
                 0,
                 0,
                 true);
@@ -237,9 +238,46 @@ public class USBPcapClient : IDisposable
         }
     }
 
+    /// <summary>
+    /// Get device descriptor for given device
+    /// hub - HANDLE to USB hub
+    /// port - hub port number to which the device whose descriptor is queried is connected
+    /// index - 0-based configuration descriptor index
+    /// Returns dynamically allocated USB_DESCRIPTOR_REQUEST structure that must be freed
+    /// using free(). On failure, returns NULL.
+    /// </summary>
+    /// <param name="hub"></param>
+    /// <param name="port"></param>
+    /// <param name="i"></param>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
     private unsafe USB_DESCRIPTOR_REQUEST* get_config_descriptor(SafeFileHandle hub, ulong port, int i)
     {
-        throw new NotImplementedException();
+
+        ulong nBytes = 0;
+        ulong nBytesReturned = 0;
+        var bufferSize = Marshal.SizeOf<USB_DESCRIPTOR_REQUEST>() + Marshal.SizeOf<USB_CONFIGURATION_DESCRIPTOR>();
+        var buffer = (USB_DESCRIPTOR_REQUEST*)Marshal.AllocHGlobal(bufferSize);
+        var request = *buffer;
+        var descriptor = GetRequestData<USB_CONFIGURATION_DESCRIPTOR>(request);
+
+        /* This function does two queries for the descriptor:
+         *   * 1st time to obtain the configuration descriptor itself
+         *   * 2nd time to obtain the configuration descriptor and all interface and
+         *     endpoint descriptors
+         */
+    }
+
+    private static unsafe T? GetRequestData<T>(USB_DESCRIPTOR_REQUEST request)
+    {
+        // get pointer to request
+        var requestPtr = new IntPtr(&request);
+
+        // increment the pointer by the size of the structure.
+        requestPtr += Marshal.SizeOf(request);
+
+        // the data is "off the end of" the structure
+        return Marshal.PtrToStructure<T>(requestPtr);
     }
 
     private unsafe void write_device_descriptor_complete(port_descriptor_callback_context* ctx, ushort deviceAddress, USB_DEVICE_DESCRIPTOR* descriptor)

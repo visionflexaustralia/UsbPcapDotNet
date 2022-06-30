@@ -10,5 +10,5 @@ struct USB_DESCRIPTOR_REQUEST
     /// <summary>
     /// can be USB_STRING_DESCRIPTOR, <see cref="USB_DEVICE_DESCRIPTOR"/> or <see cref="USB_CONFIGURATION_DESCRIPTOR" />
     /// </summary>
-    public unsafe void* Data;
+    //public byte[] Data;
 }
