@@ -195,7 +195,7 @@ public class USBPcapClient : IDisposable
         }
 
         write_setup_packet(ctx, URB_FUNCTION.URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE, deviceAddress, 0x80, 6, USB_DEVICE_DESCRIPTOR_TYPE << 8, 0, 18, false);
-        write_device_descriptor_complete(ctx, deviceAddress, desc);
+        write_device_descriptor_complete(ctx, deviceAddress, &desc);
 
         var request = get_config_descriptor(hub, port, 0);
 
@@ -237,7 +237,44 @@ public class USBPcapClient : IDisposable
         }
     }
 
-    private const int USBPCAP_CONTROL_STAGE_SETUP = 0;
+    private unsafe void write_device_descriptor_complete(port_descriptor_callback_context* ctx, ushort deviceAddress, USB_DEVICE_DESCRIPTOR* descriptor)
+    {
+        var data_len = Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>() + 18;
+        var data = (USBPCAP_BUFFER_CONTROL_HEADER*)Marshal.AllocHGlobal(data_len);
+
+        var hdr = *data;
+
+        var payload = (&data)[sizeof(USBPCAP_BUFFER_CONTROL_HEADER)];
+
+        initialize_control_header(&hdr, ctx->roothub, deviceAddress, 18, USBPCAP_CONTROL_STAGE_SETUP,URB_FUNCTION.URB_FUNCTION_CONTROL_TRANSFER , true,false );
+
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bLength); // payload[0]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bDescriptorType); // payload[1]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)(descriptor->bcdUSB & 0x00FF)); // payload[2]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)((descriptor->bcdUSB & 0xFF00) >> 8)); // payload[3]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bDeviceClass); // payload[4]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bDeviceSubClass); // payload[5]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bDeviceProtocol); // payload[6]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bMaxPacketSize0); // payload[7]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)(descriptor->idVendor & 0x00FF)); // payload[8]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)((descriptor->idVendor & 0xFF00) >> 8)); // payload[9]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)(descriptor->idProduct & 0x00FF)); // payload[10]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)( (descriptor->idProduct & 0xFF00) >> 8)); // payload[11]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)((descriptor->bcdDevice & 0x00FF))); // payload[12]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)( (descriptor->bcdDevice & 0xFF00) >> 8)); // payload[13]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->iManufacturer); // payload[14]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->iProduct); // payload[15]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->iSerialNumber); // payload[16]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bNumConfigurations); // payload[17]
+
+        add_to_list(ctx, data, data_len);
+    }
+
+    public const int USBPCAP_CONTROL_STAGE_SETUP = 0;
+    public const int USBPCAP_CONTROL_STAGE_DATA = 1;
+    public const int USBPCAP_CONTROL_STAGE_STATUS = 2;
+    public const int  USBPCAP_CONTROL_STAGE_COMPLETE = 3;
+
     private unsafe void write_complete_packet(port_descriptor_callback_context* ctx, URB_FUNCTION function, ushort deviceAddress, void* payload, int payload_length, bool @out)
     {
         throw new NotImplementedException();
