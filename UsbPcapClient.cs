@@ -160,8 +160,26 @@ public class USBPcapClient : IDisposable
 
         var pcap_packets = this.generate_pcap_packets(ctx.head, &pcap_packets_length);
 
+        free_list(ctx.head);
         pcap_length = pcap_packets_length;
         return pcap_packets;
+    }
+
+    private unsafe void free_list(list_entry* ctxHead)
+    {
+        if (ctxHead == null)
+        {
+            return;
+        }
+
+        var e = ctxHead;
+        while (e != null)
+        {
+            var tmp = e;
+            e = e->next;
+            Marshal.FreeHGlobal(tmp->data);
+            Marshal.FreeHGlobal(new IntPtr(tmp));
+        }
     }
 
     private unsafe void descriptor_callback_func(
