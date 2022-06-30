@@ -176,7 +176,7 @@ public class USBPcapClient : IDisposable
             return;
         }
 
-        write_setup_packet(ctx, 0x000b, deviceAddress, 0x80, 6, USB_DEVICE_DESCRIPTOR_TYPE << 8, 0, 18, false);
+        write_setup_packet(ctx, URB_FUNCTION.URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE, deviceAddress, 0x80, 6, USB_DEVICE_DESCRIPTOR_TYPE << 8, 0, 18, false);
         write_device_descriptor_complete(ctx, deviceAddress, desc);
 
         var request = get_config_descriptor(hub, port, 0);
@@ -186,7 +186,7 @@ public class USBPcapClient : IDisposable
             var config = request.Data;
             write_setup_packet(
                 ctx,
-                URB_GET_DESCRIPTOR_FROM_DEVICE,
+                URB_FUNCTION.URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE,
                 deviceAddress,
                 request.SetupPacket.bmRquest,
                 request.SetupPacket.bRequest,
@@ -197,7 +197,7 @@ public class USBPcapClient : IDisposable
 
             write_complete_packet(
                 ctx,
-                URB_CONTROL_TRANSFER,
+                URB_FUNCTION.URB_FUNCTION_CONTROL_TRANSFER,
                 deviceAddress,
                 request.Data,
                 request.SetupPacket.wLength,
@@ -206,7 +206,7 @@ public class USBPcapClient : IDisposable
             /* SET CONFIGURATION */
             write_setup_packet(
                 ctx,
-                URB_SELECT_CONFIGURATION,
+                URB_FUNCTION.URB_FUNCTION_SELECT_CONFIGURATION,
                 deviceAddress,
                 0x00,
                 9,
@@ -215,13 +215,15 @@ public class USBPcapClient : IDisposable
                 0,
                 true);
 
-            write_complete_packet(ctx, URB_SELECT_CONFIGURATION, deviceAddress, null, 0, true);
+            write_complete_packet(ctx, URB_FUNCTION.URB_FUNCTION_SELECT_CONFIGURATION, deviceAddress, null, 0, true);
         }
     }
 
+    private const int USBPCAP_CONTROL_STAGE_SETUP = 0;
+
     private unsafe void write_setup_packet(
         port_descriptor_callback_context* ctx,
-        ushort function,
+        URB_FUNCTION function,
         ushort deviceAddress,
         byte bmRequestType,
         byte bRequest,
@@ -230,21 +232,47 @@ public class USBPcapClient : IDisposable
         int wLength,
         bool @out)
     {
-        throw new NotImplementedException();
-        initialize_control_header();
-        add_to_list();
+        var data_len = Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>() + 8;
+        var data = (USBPCAP_BUFFER_CONTROL_HEADER*)Marshal.AllocHGlobal(data_len);
+
+        var hdr = *data;
+
+        var setup = (&data)[sizeof(USBPCAP_BUFFER_CONTROL_HEADER)];
+
+        initialize_control_header(&hdr, ctx->roothub, deviceAddress, 8, USBPCAP_CONTROL_STAGE_SETUP, function, false, @out);
+
+        Marshal.WriteByte(new IntPtr(setup++), bmRequestType); // setup[0]
+        Marshal.WriteByte(new IntPtr(setup++), bRequest); // setup[1]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)(wValue & 0x00FF)); // setup[2]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)((wValue & 0xFF00) >> 8)); // setup[3]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)(wIndex & 0x00FF)); // setup[4]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)((wIndex & 0xFF00) >> 8)); // setup[5]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)(wLength & 0x00FF)); // setup[6]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)((wLength & 0xFF00) >> 8)); // setup[7]
+
+        add_to_list(ctx, data, data_len);
     }
 
-
-    private void initialize_control_header()
+    private unsafe void initialize_control_header(USBPCAP_BUFFER_CONTROL_HEADER* hdr, ushort bus, ushort deviceAddress, uint dataLength, byte stage, URB_FUNCTION function, bool fromPdo, bool @out)
     {
-        throw new NotImplementedException();
+        hdr->header.headerLen = Convert.ToUInt16(Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>());
+        hdr->header.irpId = 0;
+        hdr->header.status = 0; /* USBD_STATUS_SUCCESS */
+        hdr->header.function = function;
+        hdr->header.info = (byte)(fromPdo ? 0x001 : 0x000b);
+        hdr->header.bus = bus;
+        hdr->header.device = deviceAddress;
+        hdr->header.endpoint = (byte)(@out ? 0x00 : 0x80);
+        hdr->header.transfer = USBPCAP_TRANSFER_TYPE.CONTROL;
+        hdr->header.dataLength = dataLength;
+        hdr->stage = stage;
     }
 
-    private unsafe void add_to_list(port_descriptor_callback_context* ctx, IntPtr data, int length)
+
+    private unsafe void add_to_list(port_descriptor_callback_context* ctx, USBPCAP_BUFFER_CONTROL_HEADER* data, int length)
     {
         var new_tail = (list_entry*)Marshal.AllocHGlobal(sizeof(list_entry));
-        new_tail->data = data;
+        new_tail->data = new IntPtr(data);
         new_tail->length = length;
         new_tail->next = null;
 
@@ -278,10 +306,10 @@ public class USBPcapClient : IDisposable
             return true;
         }
     }
-
-    public const byte URB_GET_DESCRIPTOR_FROM_DEVICE = 0x000b;
-    public const byte URB_SELECT_CONFIGURATION = 0x0000;
-    public const byte URB_CONTROL_TRANSFER = 0x0008;
+    //
+    // public const byte URB_GET_DESCRIPTOR_FROM_DEVICE = 0x000b;
+    // public const byte URB_SELECT_CONFIGURATION = 0x0000;
+    // public const byte URB_CONTROL_TRANSFER = 0x0008;
     public const byte USB_DEVICE_DESCRIPTOR_TYPE = 0x01;
 
     private unsafe void enumerate_all_connected_devices(
