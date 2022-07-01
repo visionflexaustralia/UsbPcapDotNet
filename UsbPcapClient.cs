@@ -53,10 +53,10 @@ public class USBPcapClient : IDisposable
     private ThreadData data;
     private readonly int _filterDeviceId;
 
-    public USBPcapClient(string filter, int filterDeviceId = 0)
+    public USBPcapClient(string filter, int filterDeviceId = 0, bool captureExisting = false)
     {
         this._filterDeviceId = filterDeviceId;
-        this.data = new ThreadData(filter);
+        this.data = new ThreadData(filter) { inject_descriptors = captureExisting };
     }
 
     public void Dispose()
@@ -145,7 +145,7 @@ public class USBPcapClient : IDisposable
         ushort targetFilterNum = 0;
         do
         {
-            tmp = filter[skip..];
+            tmp = filter[skip++..];
 
             if (ushort.TryParse(tmp, out var result))
             {
@@ -266,7 +266,7 @@ public class USBPcapClient : IDisposable
         uint nBytes = 0;
         uint nBytesReturned = 0;
         var bufferSize = Marshal.SizeOf<USB_DESCRIPTOR_REQUEST>() + Marshal.SizeOf<USB_CONFIGURATION_DESCRIPTOR>();
-
+        nBytes = (uint)bufferSize;
         USB_DESCRIPTOR_REQUEST* request = null;
         USB_CONFIGURATION_DESCRIPTOR* descriptor;
         USB_CONFIGURATION_DESCRIPTOR? config;
@@ -301,7 +301,7 @@ public class USBPcapClient : IDisposable
                     out nBytesReturned,
                     null))
             {
-                Console.WriteLine($"Failed to get descriptor ${Marshal.GetLastWin32Error()}");
+                Console.WriteLine($"Failed to get descriptor ${Marshal.GetLastSystemError()}");
                 return null;
             }
 
@@ -401,7 +401,8 @@ public class USBPcapClient : IDisposable
 
         var hdr = *data;
 
-        var payload = (&data)[sizeof(USBPCAP_BUFFER_CONTROL_HEADER)];
+        // This is NOT a `USBPCAP_BUFFER_CONTROL_HEADER`
+        var payload = (data + sizeof(USBPCAP_BUFFER_CONTROL_HEADER));
 
         initialize_control_header(
             &hdr,
@@ -445,13 +446,14 @@ public class USBPcapClient : IDisposable
         URB_FUNCTION function,
         ushort deviceAddress,
         void* payload,
-        int payload_length,
+        uint payload_length,
         bool @out)
     {
-        var data_len = Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>() + payload_length;
-        var data = (USBPCAP_BUFFER_CONTROL_HEADER*)Marshal.AllocHGlobal(data_len);
+        var data_len = (int)(Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>() + payload_length);
+        var data = (USBPCAP_BUFFER_CONTROL_HEADER*)Marshal.AllocHGlobal((int)data_len);
 
-        var hdr = *data;
+
+        initialize_control_header(data, ctx->roothub, deviceAddress, payload_length, USBPCAP_CONTROL_STAGE_COMPLETE, function, true, @out  );
 
         if (payload_length > 0)
         {
@@ -478,7 +480,7 @@ public class USBPcapClient : IDisposable
 
         var hdr = *data;
 
-        var setup = (&data)[sizeof(USBPCAP_BUFFER_CONTROL_HEADER)];
+        var setup = (data) + sizeof(USBPCAP_BUFFER_CONTROL_HEADER);
 
         initialize_control_header(
             &hdr,
@@ -639,11 +641,11 @@ public class USBPcapClient : IDisposable
             hdr->incl_len = (uint)e->length;
             hdr->orig_len = (uint)e->length;
 
-            Buffer.MemoryCopy(hdr, (void*)(&pcap)[offset], totalLength - offset, Marshal.SizeOf<pcaprec_hdr_t>());
+            Buffer.MemoryCopy(hdr, (void*)(pcap + offset), totalLength - offset, Marshal.SizeOf<pcaprec_hdr_t>());
             //Marshal.Copy(GetBytes(hdr), 0, (&pcap)[offset], Marshal.SizeOf<pcaprec_hdr_t>());
             offset += Marshal.SizeOf<pcaprec_hdr_t>();
 
-            Buffer.MemoryCopy((void*)e->data, (void*)(&pcap)[offset], totalLength - offset, e->length);
+            Buffer.MemoryCopy((void*)e->data, (void*)(pcap + offset), totalLength - offset, e->length);
             //Marshal.Copy(GetBytes(e->data), 0, (&pcap)[offset], e->length);
             offset += e->length;
         }
