@@ -98,8 +98,8 @@ internal class SafeMethods
     [DllImport("kernel32.dll", SetLastError = true)]
     internal static extern bool CloseHandle(IntPtr hHandle);
 
-    [DllImport("Kernel32.dll", SetLastError = false, CharSet = CharSet.Auto)]
-    public static extern bool DeviceIoControl(
+    [DllImport("Kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public static extern unsafe bool DeviceIoControl(
         SafeFileHandle hDevice,
         uint IoControlCode,
         IntPtr inBuffer,
@@ -203,7 +203,7 @@ internal class SafeMethods
         ref SP_DEVINSTALL_PARAMS devParams);
 
 
-    [DllImport("setupapi.dll", SetLastError=true)]
+    [DllImport("setupapi.dll", SetLastError = true)]
     public static extern unsafe bool SetupDiEnumDeviceInfo(SP_DEVINFO_DATA* DeviceInfoSet, uint MemberIndex, ref SP_DEVINFO_DATA DeviceInfoData);
 
 }

@@ -268,7 +268,7 @@ public class USBPcapClient : IDisposable
             return IntPtr.Zero;
         }
 
-        var safeFilterHandle = new SafeFileHandle(filter_handle, true);
+        var safeFilterHandle = new SafeFileHandle(filter_handle, false);
 
         var success = false;
 
@@ -292,7 +292,7 @@ public class USBPcapClient : IDisposable
                 ref nativeOverlapped);
             if (success == false)
             {
-                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret}) {Marshal.GetLastWin32Error():x8}");
                 return IntPtr.Zero;
             }
 
@@ -309,7 +309,7 @@ public class USBPcapClient : IDisposable
                 ref nativeOverlapped);
             if (success == false)
             {
-                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret}) {Marshal.GetLastWin32Error():x8}");
                 return IntPtr.Zero;
             }
 
@@ -328,7 +328,7 @@ public class USBPcapClient : IDisposable
 
             if (success == false)
             {
-                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret}) {Marshal.GetLastWin32Error():x8}");
                 return IntPtr.Zero;
             }
 
@@ -426,7 +426,7 @@ public class USBPcapClient : IDisposable
             FileMode.Open,
             FileAttributes.Normal,
             IntPtr.Zero);
-        var safeFileHandle = new SafeFileHandle(hHubDevice, true);
+        var safeFileHandle = new SafeFileHandle(hHubDevice, false);
 
         if (hHubDevice == SafeMethods.INVALID_HANDLE_VALUE)
         {
@@ -458,6 +458,7 @@ public class USBPcapClient : IDisposable
                 ref overlap);
             if (success == false)
             {
+                Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
                 return;
             }
 
@@ -517,6 +518,10 @@ public class USBPcapClient : IDisposable
                         hubAddress,
                         output);
                 }
+                else
+                {
+                    Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
+                }
 
                 var connectionStatus = (int)connectionInformation.ConnectionStatus;
                 if (connectionInformation.DeviceIsHub)
@@ -556,6 +561,7 @@ public class USBPcapClient : IDisposable
             ref overlap);
         if (success == false)
         {
+            Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
             return string.Empty;
         }
 
@@ -587,6 +593,7 @@ public class USBPcapClient : IDisposable
 
             if (!success)
             {
+                Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
                 return string.Empty;
             }
 
@@ -915,6 +922,7 @@ public class USBPcapClient : IDisposable
                 out lpBytesReturned,
                 ref overlap))
         {
+            Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
             return string.Empty;
         }
 
@@ -939,6 +947,7 @@ public class USBPcapClient : IDisposable
                     out lpBytesReturned,
                     ref overlap))
             {
+                Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
                 return string.Empty;
             }
 
@@ -962,7 +971,7 @@ public class USBPcapClient : IDisposable
             FileAttributes.None,
             IntPtr.Zero);
 
-        var safeFile = new SafeFileHandle(file, true);
+        var safeFile = new SafeFileHandle(file, false);
 
         if (file == SafeMethods.INVALID_HANDLE_VALUE)
         {
@@ -1128,7 +1137,7 @@ public class USBPcapClient : IDisposable
             devInfo.cbSize = (uint)sizeof(SP_DEVINFO_DATA);
             for (devIndex = 0; SafeMethods.SetupDiEnumDeviceInfo(devs, devIndex, ref devInfo); devIndex++)
             {
-                callback(new SafeFileHandle((IntPtr)devs, true), devInfo, devInfoListDetail);
+                callback(new SafeFileHandle((IntPtr)devs, false), devInfo, devInfoListDetail);
             }
         }
         finally
@@ -1183,8 +1192,8 @@ public class USBPcapClient : IDisposable
         {
             devParams.cbSize = GetSizeOf(devParams);
 
-            if (SafeMethods.SetupDiGetDeviceInstallParams(devs,devInfo, ref devParams) &&
-                (devParams.Flags & (int)( SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDRESTART | SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDREBOOT)) != 0)
+            if (SafeMethods.SetupDiGetDeviceInstallParams(devs, devInfo, ref devParams) &&
+                (devParams.Flags & (int)(SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDRESTART | SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDREBOOT)) != 0)
             {
                 Console.WriteLine("Reboot required.\n");
             }
@@ -1195,7 +1204,7 @@ public class USBPcapClient : IDisposable
         }
     }
 
-    public static unsafe int GetSizeOf<T>(T obj) where T: unmanaged
+    public static unsafe int GetSizeOf<T>(T obj) where T : unmanaged
     {
         return sizeof(T);
     }
