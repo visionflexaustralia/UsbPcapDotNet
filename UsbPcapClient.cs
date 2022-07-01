@@ -301,20 +301,20 @@ public class USBPcapClient : IDisposable
                     out nBytesReturned,
                     null))
             {
-                Console.WriteLine($"Failed to get descriptor ${Marshal.GetLastSystemError()}");
+                Console.WriteLine($"Failed to get descriptor {Marshal.GetLastWin32Error():x8}");
                 return null;
             }
 
             if (nBytes != nBytesReturned)
             {
-                Console.WriteLine($"Get Descriptor IOCTL returned ${nBytesReturned} bytes (requested ${nBytes})");
+                Console.WriteLine($"Get Descriptor IOCTL returned {nBytesReturned} bytes (requested {nBytes})");
                 return null;
             }
 
             if (descriptor->wTotalLength < Marshal.SizeOf<USB_CONFIGURATION_DESCRIPTOR>())
             {
                 Console.WriteLine(
-                    $"Configuration descriptor is too small (${descriptor->wTotalLength}) to hold the common data");
+                    $"Configuration descriptor is too small ({descriptor->wTotalLength}) to hold the common data");
                 return null;
             }
         }
@@ -351,13 +351,13 @@ public class USBPcapClient : IDisposable
                 out nBytesReturned,
                 null))
         {
-            Console.WriteLine($"Failed to get descriptor ${Marshal.GetLastWin32Error()}");
+            Console.WriteLine($"Failed to get descriptor {Marshal.GetLastWin32Error():x8}");
             Marshal.FreeHGlobal(new IntPtr(request));
             return null;
         }
         if (nBytes != nBytesReturned)
         {
-            Console.WriteLine($"Get Descriptor IOCTL returned ${nBytesReturned} bytes (requested ${nBytes})");
+            Console.WriteLine($"Get Descriptor IOCTL returned {nBytesReturned} bytes (requested {nBytes})");
             Marshal.FreeHGlobal(new IntPtr(request));
             return null;
         }
@@ -778,7 +778,7 @@ public class USBPcapClient : IDisposable
             return IntPtr.Zero;
         }
 
-        var safeFilterHandle = new SafeFileHandle(filter_handle, true);
+        var safeFilterHandle = new SafeFileHandle(filter_handle, false);
 
         var success = false;
 
@@ -802,7 +802,7 @@ public class USBPcapClient : IDisposable
                 &nativeOverlapped);
             if (success == false)
             {
-                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret}) {Marshal.GetLastWin32Error():x8}");
                 return IntPtr.Zero;
             }
 
@@ -819,7 +819,7 @@ public class USBPcapClient : IDisposable
                 &nativeOverlapped);
             if (success == false)
             {
-                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret}) {Marshal.GetLastWin32Error():x8}");
                 return IntPtr.Zero;
             }
 
@@ -838,9 +838,9 @@ public class USBPcapClient : IDisposable
 
             if (success == false)
             {
-                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret}) {Marshal.GetLastWin32Error():x8}");
                 return IntPtr.Zero;
-            }
+                         }
 
             return filter_handle;
         }
@@ -954,7 +954,7 @@ public class USBPcapClient : IDisposable
             FileMode.Open,
             FileAttributes.Normal,
             IntPtr.Zero);
-        var safeFileHandle = new SafeFileHandle(hHubDevice, true);
+        var safeFileHandle = new SafeFileHandle(hHubDevice, false);
 
         if (hHubDevice == SafeMethods.INVALID_HANDLE_VALUE)
         {
@@ -986,6 +986,7 @@ public class USBPcapClient : IDisposable
                 &overlap);
             if (success == false)
             {
+                Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
                 return;
             }
 
@@ -1055,6 +1056,10 @@ public class USBPcapClient : IDisposable
                         output,
                         print_callback);
                 }
+                else
+                {
+                    Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
+                }
 
                 var connectionStatus = (int)connectionInformation.ConnectionStatus;
 
@@ -1106,6 +1111,7 @@ public class USBPcapClient : IDisposable
             &overlap);
         if (success == false)
         {
+            Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
             return string.Empty;
         }
 
@@ -1137,6 +1143,7 @@ public class USBPcapClient : IDisposable
 
             if (!success)
             {
+                Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
                 return string.Empty;
             }
 
@@ -1492,6 +1499,7 @@ public class USBPcapClient : IDisposable
                 out lpBytesReturned,
                 &overlap))
         {
+            Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
             return string.Empty;
         }
 
@@ -1516,6 +1524,7 @@ public class USBPcapClient : IDisposable
                     out lpBytesReturned,
                     &overlap))
             {
+                Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
                 return string.Empty;
             }
 
@@ -1539,7 +1548,7 @@ public class USBPcapClient : IDisposable
             FileAttributes.None,
             IntPtr.Zero);
 
-        var safeFile = new SafeFileHandle(file, true);
+        var safeFile = new SafeFileHandle(file, false);
 
         if (file == SafeMethods.INVALID_HANDLE_VALUE)
         {
@@ -1695,7 +1704,7 @@ public class USBPcapClient : IDisposable
             devInfo.cbSize = (uint)sizeof(SP_DEVINFO_DATA);
             for (devIndex = 0; SafeMethods.SetupDiEnumDeviceInfo(devs, devIndex, ref devInfo); devIndex++)
             {
-                callback(new SafeFileHandle((IntPtr)devs, true), devInfo, devInfoListDetail);
+                callback(new SafeFileHandle((IntPtr)devs, false), devInfo, devInfoListDetail);
             }
         }
         finally

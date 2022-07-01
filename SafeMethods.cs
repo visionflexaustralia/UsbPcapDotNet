@@ -99,7 +99,7 @@ internal class SafeMethods
     [DllImport("kernel32.dll", SetLastError = true)]
     internal static extern bool CloseHandle(IntPtr hHandle);
 
-    [DllImport("Kernel32.dll", SetLastError = false, CharSet = CharSet.Auto)]
+    [DllImport("Kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     public static extern unsafe bool DeviceIoControl(
         SafeFileHandle hDevice,
         uint IoControlCode,
