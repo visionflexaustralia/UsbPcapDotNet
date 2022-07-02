@@ -206,6 +206,7 @@ public class USBPcapClient : IDisposable
             0,
             18,
             false);
+
         write_device_descriptor_complete(ctx, deviceAddress, &desc);
 
         var request = get_config_descriptor(hub, port, 0);
@@ -294,14 +295,14 @@ public class USBPcapClient : IDisposable
             if (!SafeMethods.DeviceIoControl(
                     hub,
                     IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION,
-                    new IntPtr(request),
+                    request,
                     nBytes,
-                    new IntPtr(request),
+                    request,
                     nBytes,
                     out nBytesReturned,
                     null))
             {
-                Console.WriteLine($"Failed to get descriptor {Marshal.GetLastWin32Error():x8}");
+                Console.WriteLine($"Failed to get descriptor {Marshal.GetLastWin32Error()}");
                 return null;
             }
 
@@ -325,8 +326,8 @@ public class USBPcapClient : IDisposable
 
         /* Allocate the buffer and request complete descriptor */
         nBytes = (uint)(Marshal.SizeOf<USB_DESCRIPTOR_REQUEST>() + descriptor->wTotalLength);
-        request = (USB_DESCRIPTOR_REQUEST*)Marshal.AllocHGlobal((int)nBytes);
-        if ((IntPtr)request == (IntPtr)null)
+        request = (USB_DESCRIPTOR_REQUEST*)Marshal.AllocHGlobal((int)nBytes).ToPointer();
+        if (new IntPtr(request) == new IntPtr(null))
         {
             return null;
         }
@@ -344,9 +345,9 @@ public class USBPcapClient : IDisposable
         if (!SafeMethods.DeviceIoControl(
                 hub,
                 IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION,
-                new IntPtr(request),
+                request,
                 nBytes,
-                new IntPtr(request),
+                request,
                 nBytes,
                 out nBytesReturned,
                 null))
@@ -375,20 +376,23 @@ public class USBPcapClient : IDisposable
 
     const int IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION = 0x220410;
 
-    private static unsafe (T?, IntPtr) GetRequestData<T>(USB_DESCRIPTOR_REQUEST* request)
-        where T : unmanaged =>
-        GetRequestData<T>(*request);
+    private static unsafe (T, IntPtr) GetRequestData<T>(USB_DESCRIPTOR_REQUEST* request)
+        where T : unmanaged
 
-    private static unsafe (T?, IntPtr) GetRequestData<T>(USB_DESCRIPTOR_REQUEST request)
     {
-        // get pointer to request
-        var requestPtr = new IntPtr(&request);
-
         // increment the pointer by the size of the structure.
-        requestPtr += Marshal.SizeOf(request);
+        var resultPtr = new IntPtr(request + Marshal.SizeOf<T>());
 
         // the data is "off the end of" the structure
-        return (Marshal.PtrToStructure<T>(requestPtr), requestPtr);
+        return (Marshal.PtrToStructure<T>(resultPtr)!, resultPtr);
+    }
+
+    private static unsafe (T, IntPtr) GetRequestData<T>(USB_DESCRIPTOR_REQUEST request) where T: unmanaged
+    {
+        // get pointer to request
+        var requestPtr = &request;
+
+        return GetRequestData<T>(requestPtr);
     }
 
     private unsafe void write_device_descriptor_complete(
@@ -545,8 +549,11 @@ public class USBPcapClient : IDisposable
         }
         else
         {
-            // BUG: does this have the same effect as if it were C/++? no = bug.
-            ctx->head = ctx->tail = new_tail;
+            int x = 0;
+            int y = x = 10;
+            ctx->head = new_tail;
+            // ctx->head = ctx->tail; // = new_tail;
+            ctx->tail = new_tail;
         }
     }
 
@@ -615,7 +622,7 @@ public class USBPcapClient : IDisposable
 
         // UINT8
 
-        for (e = ctxHead; (IntPtr)e != IntPtr.Zero; e = e->next)
+        for (e = ctxHead; new IntPtr(e) != IntPtr.Zero; e = e->next)
         {
             totalLength += Marshal.SizeOf<pcaprec_hdr_t>();
             totalLength += e->length;
@@ -625,11 +632,11 @@ public class USBPcapClient : IDisposable
         var pcap = Marshal.AllocHGlobal(totalLength);
         var offset = 0;
 
-        for (e = ctxHead; (IntPtr)e != IntPtr.Zero; e = e->next)
+        for (e = ctxHead; new IntPtr(e) != IntPtr.Zero; e = e->next)
         {
             var timestamp = new ULARGE_INTEGER();
             var data_len = Marshal.SizeOf<pcaprec_hdr_t>();
-            var hdr = (pcaprec_hdr_t*)Marshal.AllocHGlobal(Marshal.SizeOf<pcaprec_hdr_t>());
+            var hdr = (pcaprec_hdr_t*)Marshal.AllocHGlobal(data_len).ToPointer();
 
             SafeMethods.GetSystemTimeAsFileTime(out var ts);
 
@@ -794,9 +801,9 @@ public class USBPcapClient : IDisposable
             success = SafeMethods.DeviceIoControl(
                 safeFilterHandle,
                 SafeMethods.IOCTL_USBPCAP_SET_SNAPLEN_SIZE,
-                (IntPtr)pBuf,
+                pBuf,
                 inBufSize,
-                IntPtr.Zero,
+                IntPtr.Zero.ToPointer(),
                 0,
                 out var bytes_ret,
                 &nativeOverlapped);
@@ -811,9 +818,9 @@ public class USBPcapClient : IDisposable
             success = SafeMethods.DeviceIoControl(
                 safeFilterHandle,
                 SafeMethods.IOCTL_USBPCAP_SETUP_BUFFER,
-                (IntPtr)pBuf,
+                pBuf,
                 inBufSize,
-                IntPtr.Zero,
+                IntPtr.Zero.ToPointer(),
                 0,
                 out bytes_ret,
                 &nativeOverlapped);
@@ -827,10 +834,9 @@ public class USBPcapClient : IDisposable
             inBufSize = (uint)sizeof(USBPCAP_ADDRESS_FILTER);
             success = SafeMethods.DeviceIoControl(
                 safeFilterHandle,
-                SafeMethods.IOCTL_USBPCAP_START_FILTERING,
-                (IntPtr)(&data.filter),
+                SafeMethods.IOCTL_USBPCAP_START_FILTERING, &data.filter,
                 inBufSize,
-                IntPtr.Zero,
+                IntPtr.Zero.ToPointer(),
                 0,
                 out bytes_ret,
                 &nativeOverlapped);
@@ -978,9 +984,9 @@ public class USBPcapClient : IDisposable
             var success = SafeMethods.DeviceIoControl(
                 safeFileHandle,
                 SafeMethods.IOCTL_USB_GET_NODE_INFORMATION,
-                pHubInfo,
+                pHubInfo.ToPointer(),
                 (uint)hubInfoSize,
-                pHubInfo,
+                pHubInfo.ToPointer(),
                 (uint)hubInfoSize,
                 out var nBytes,
                 &overlap);
@@ -1031,7 +1037,7 @@ public class USBPcapClient : IDisposable
             var inBufferSize = (uint)sizeof(USB_NODE_CONNECTION_INFORMATION);
             USB_NODE_CONNECTION_INFORMATION connectionInformation;
             connectionInformation.ConnectionIndex = index;
-            var buffer = new IntPtr(&connectionInformation);
+            var buffer = &connectionInformation;
             var overlap = new NativeOverlapped();
             if (SafeMethods.DeviceIoControl(
                     hHubDevice,
@@ -1097,15 +1103,14 @@ public class USBPcapClient : IDisposable
         extHubName.ConnectionIndex = ConnectionIndex;
 
         var pInfo = &extHubName;
-        var ptrBuf = new IntPtr(pInfo);
 
         var overlap = new NativeOverlapped();
         var success = SafeMethods.DeviceIoControl(
             Hub,
             SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_NAME,
-            ptrBuf,
+            pInfo,
             nameSize,
-            ptrBuf,
+            pInfo,
             nameSize,
             out nBytes,
             &overlap);
@@ -1134,9 +1139,9 @@ public class USBPcapClient : IDisposable
             success = SafeMethods.DeviceIoControl(
                 Hub,
                 SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_NAME,
-                extHubNameW,
+                extHubNameW.ToPointer(),
                 nBytes,
-                extHubNameW,
+                extHubNameW.ToPointer(),
                 nBytes,
                 out nBytes,
                 &overlap);
@@ -1486,7 +1491,7 @@ public class USBPcapClient : IDisposable
         var num1 = (uint)sizeof(USB_NODE_CONNECTION_DRIVERKEY_NAME);
         USB_NODE_CONNECTION_DRIVERKEY_NAME connectionDriverkeyName;
         connectionDriverkeyName.ConnectionIndex = index;
-        var num2 = new IntPtr(&connectionDriverkeyName);
+        var num2 = &connectionDriverkeyName;
         uint lpBytesReturned;
         var overlap = new NativeOverlapped();
         if (!SafeMethods.DeviceIoControl(
@@ -1517,9 +1522,9 @@ public class USBPcapClient : IDisposable
             if (!SafeMethods.DeviceIoControl(
                     hHubDevice,
                     SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME,
-                    num3,
+                    num3.ToPointer(),
                     actualLength,
-                    num3,
+                    num3.ToPointer(),
                     actualLength,
                     out lpBytesReturned,
                     &overlap))
@@ -1566,9 +1571,9 @@ public class USBPcapClient : IDisposable
                 return !SafeMethods.DeviceIoControl(
                     safeFile,
                     SafeMethods.IOCTL_USBPCAP_GET_HUB_SYMLINK,
-                    IntPtr.Zero,
+                    IntPtr.Zero.ToPointer(),
                     0U,
-                    gcHandle.AddrOfPinnedObject(),
+                    gcHandle.AddrOfPinnedObject().ToPointer(),
                     (uint)numArray.Length,
                     out var _,
                     &overlap)

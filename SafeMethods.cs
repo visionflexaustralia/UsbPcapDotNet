@@ -103,9 +103,9 @@ internal class SafeMethods
     public static extern unsafe bool DeviceIoControl(
         SafeFileHandle hDevice,
         uint IoControlCode,
-        IntPtr inBuffer,
+        void* inBuffer,
         uint nInBufferSize,
-        IntPtr OutBuffer,
+        void* OutBuffer,
         uint nOutBufferSize,
         out uint bytesReturned,
         [In] NativeOverlapped* Overlapped);
