@@ -110,7 +110,7 @@ public struct ThreadData
 }
 
 [StructLayout(LayoutKind.Sequential)]
-public struct inject_descriptors
+public unsafe struct inject_descriptors
 {
     /// <summary>
     ///     Packets to inject after pcap header on capture start
@@ -129,7 +129,7 @@ public struct inject_descriptors
     ///     the header and then the normal capture continues.
     ///     sizeof(pcaprec_hdr_t)
     /// </summary>
-    public unsafe fixed char buf[24];
+    public fixed char buf[24];
 
     public int buf_written;
 }
