@@ -1,4 +1,5 @@
 ﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
@@ -98,16 +99,20 @@ internal class SafeMethods
     [DllImport("kernel32.dll", SetLastError = true)]
     internal static extern bool CloseHandle(IntPtr hHandle);
 
-    [DllImport("Kernel32.dll", SetLastError = false, CharSet = CharSet.Auto)]
-    public static extern bool DeviceIoControl(
+    [DllImport("Kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    public static extern unsafe bool DeviceIoControl(
         SafeFileHandle hDevice,
         uint IoControlCode,
-        IntPtr inBuffer,
+        void* inBuffer,
         uint nInBufferSize,
-        IntPtr OutBuffer,
+        void* OutBuffer,
         uint nOutBufferSize,
         out uint bytesReturned,
-        [In] ref NativeOverlapped Overlapped);
+        [In] NativeOverlapped* Overlapped);
+
+    [DllImport("kernel32.dll")]
+    public static extern void GetSystemTimeAsFileTime(out FILETIME
+        lpSystemTimeAsFileTime);
 
     [DllImport("setupapi.dll", SetLastError = true)]
     internal static extern CONFIGRET CM_Locate_DevNodeA(ref uint pdnDevInst, string? pDeviceID, int ulFlags);

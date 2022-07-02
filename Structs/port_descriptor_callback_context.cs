@@ -7,7 +7,7 @@ public unsafe struct list_entry
     public list_entry* next;
 }
 
-public unsafe struct descriptor_callback_context
+public unsafe struct port_descriptor_callback_context
 {
     public ushort roothub;
     public USBPCAP_ADDRESS_FILTER addresses;

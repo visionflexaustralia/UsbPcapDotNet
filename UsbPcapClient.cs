@@ -1,21 +1,32 @@
 ﻿// Taken from https://github.com/stjeong/usbpcap/tree/master/windows/USBPcapLib
 // LICENSE: MIT
 
+using System.Net;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
+using static Microsoft.Win32.Registry;
 
 namespace UsbPcapDotNet;
 
 public class USBPcapClient : IDisposable
 {
-    public unsafe delegate void descriptor_callback(
-        IntPtr hub,
+    public unsafe delegate void ConnectedPortCallback(
+        SafeFileHandle hub,
         ulong port,
         ushort deviceAddress,
         USB_DEVICE_DESCRIPTOR desc,
-        descriptor_callback_context* context);
+        port_descriptor_callback_context* context);
+
+    public delegate void DeviceInfoCallback(
+        ulong level,
+        ulong port,
+        string display,
+        ushort deviceAddress,
+        ushort parentAddress,
+        ulong node,
+        ulong parentNode);
 
     public const int DIGCF_ALLCLASSES = (0x00000004);
     public const int DIGCF_PRESENT = (0x00000002);
@@ -37,30 +48,30 @@ public class USBPcapClient : IDisposable
     public const uint ERROR_INVALID_DATA = 13;
     public const uint ERROR_NO_MORE_ITEMS = 259;
     public const uint ERROR_ELEMENT_NOT_FOUND = 1168;
-
+    public const byte USB_CONFIGURATION_DESCRIPTOR_TYPE = 0x02;
     public const int BUFFER_SIZE = 4096;
-    private ThreadData _data;
+    private ThreadData data;
     private readonly int _filterDeviceId;
 
-    public USBPcapClient(string filter, int filterDeviceId = 0)
+    public USBPcapClient(string filter, int filterDeviceId = 0, bool captureExisting = false)
     {
         this._filterDeviceId = filterDeviceId;
-        this._data = new ThreadData(filter);
+        this.data = new ThreadData(filter) { inject_descriptors = captureExisting };
     }
 
     public void Dispose()
     {
-        if (this._data.exit_event != null)
+        if (this.data.exit_event != null)
         {
-            this._data.exit_event.Close();
+            this.data.exit_event.Close();
         }
 
-        if (!(this._data.read_handle != IntPtr.Zero))
+        if (!(this.data.read_handle != IntPtr.Zero))
         {
             return;
         }
 
-        SafeMethods.CloseHandle(this._data.read_handle);
+        SafeMethods.CloseHandle(this.data.read_handle);
     }
 
     public event EventHandler<HeaderEventArgs>? HeaderRead;
@@ -98,15 +109,25 @@ public class USBPcapClient : IDisposable
         }
         else
         {
-            this._data.filter = filter;
-            this._data.exit_event = new EventWaitHandle(false, EventResetMode.ManualReset);
-            this._data.read_handle = this.create_filter_read_handle(this._data);
-            if (this._data.read_handle == IntPtr.Zero)
+            this.data.filter = filter;
+            this.data.exit_event = new EventWaitHandle(false, EventResetMode.ManualReset);
+
+            if (this.data.inject_descriptors)
+            {
+                this.data.descriptors.descriptors = descriptors_generate_pcap(
+                    this.data.device,
+                    ref this.data.descriptors.descriptors_len,
+                    this.data.filter);
+                this.data.descriptors.buf_written = 0;
+            }
+
+            this.data.read_handle = this.create_filter_read_handle(this.data);
+            if (this.data.read_handle == IntPtr.Zero)
             {
                 return;
             }
 
-            new Thread(this.read_thread!) { IsBackground = true }.Start(this._data);
+            new Thread(this.read_thread!) { IsBackground = true }.Start(this.data);
         }
     }
 
@@ -116,28 +137,528 @@ public class USBPcapClient : IDisposable
         USBPCAP_ADDRESS_FILTER addresses)
     {
         var pcap_packets_length = 0;
-        var ctx = new descriptor_callback_context();
+        var ctx = new port_descriptor_callback_context();
+
+        // get the filter number
+        var tmp = string.Empty;
+        var skip = 0;
+        ushort targetFilterNum = 0;
+        do
+        {
+            tmp = filter[skip++..];
+
+            if (ushort.TryParse(tmp, out var result))
+            {
+                targetFilterNum = result;
+            }
+        } while (targetFilterNum == 0);
+
+
+        ctx.roothub = targetFilterNum;
+        ctx.addresses = addresses;
         ctx.head = null;
         ctx.tail = null;
+        this.enumerate_all_connected_devices(filter, this.descriptor_callback_func, &ctx);
 
-        this.enumerate_all_connected_devices(null!, null!, null);
+        var pcap_packets = this.generate_pcap_packets(ctx.head, &pcap_packets_length);
 
-        this.generate_pcap_packets(ctx.head, ref pcap_packets_length);
-
-        return IntPtr.Zero;
+        free_list(ctx.head);
+        pcap_length = pcap_packets_length;
+        return pcap_packets;
     }
+
+    private unsafe void free_list(list_entry* ctxHead)
+    {
+        if (ctxHead == null)
+        {
+            return;
+        }
+
+        var e = ctxHead;
+        while (e != null)
+        {
+            var tmp = e;
+            e = e->next;
+            Marshal.FreeHGlobal(tmp->data);
+            Marshal.FreeHGlobal(new IntPtr(tmp));
+        }
+    }
+
+    private unsafe void descriptor_callback_func(
+        SafeFileHandle hub,
+        ulong port,
+        ushort deviceAddress,
+        USB_DEVICE_DESCRIPTOR desc,
+        port_descriptor_callback_context* ctx)
+    {
+        if (!USBPcapIsDeviceFiltered(ctx->addresses, deviceAddress))
+        {
+            return;
+        }
+
+        write_setup_packet(
+            ctx,
+            URB_FUNCTION.URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE,
+            deviceAddress,
+            0x80,
+            6,
+            USB_DEVICE_DESCRIPTOR_TYPE << 8,
+            0,
+            18,
+            false);
+
+        write_device_descriptor_complete(ctx, deviceAddress, &desc);
+
+        var request = get_config_descriptor(hub, port, 0);
+
+        if (request != null)
+        {
+            var (config, configPtr) = GetRequestData<USB_CONFIGURATION_DESCRIPTOR>(*request);
+            write_setup_packet(
+                ctx,
+                URB_FUNCTION.URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE,
+                deviceAddress,
+                request->SetupPacket.bmRequest,
+                request->SetupPacket.bRequest,
+                request->SetupPacket.wValue,
+                request->SetupPacket.wIndex,
+                request->SetupPacket.wLength,
+                false);
+
+            write_complete_packet(
+                ctx,
+                URB_FUNCTION.URB_FUNCTION_CONTROL_TRANSFER,
+                deviceAddress,
+                &config,
+                request->SetupPacket.wLength,
+                false);
+
+            /* SET CONFIGURATION */
+            write_setup_packet(
+                ctx,
+                URB_FUNCTION.URB_FUNCTION_SELECT_CONFIGURATION,
+                deviceAddress,
+                0x00,
+                9,
+                config.bConfigurationValue,
+                0,
+                0,
+                true);
+
+            write_complete_packet(ctx, URB_FUNCTION.URB_FUNCTION_SELECT_CONFIGURATION, deviceAddress, null, 0, true);
+        }
+    }
+
+    /// <summary>
+    /// Get device descriptor for given device
+    /// hub - HANDLE to USB hub
+    /// port - hub port number to which the device whose descriptor is queried is connected
+    /// index - 0-based configuration descriptor index
+    /// Returns dynamically allocated USB_DESCRIPTOR_REQUEST structure that must be freed
+    /// using free(). On failure, returns NULL.
+    /// </summary>
+    /// <param name="hub"></param>
+    /// <param name="port"></param>
+    /// <param name="i"></param>
+    /// <returns></returns>
+    /// <exception cref="NotImplementedException"></exception>
+    private unsafe USB_DESCRIPTOR_REQUEST* get_config_descriptor(SafeFileHandle hub, ulong port, int index)
+    {
+        uint nBytes = 0;
+        uint nBytesReturned = 0;
+        var bufferSize = Marshal.SizeOf<USB_DESCRIPTOR_REQUEST>() + Marshal.SizeOf<USB_CONFIGURATION_DESCRIPTOR>();
+        nBytes = (uint)bufferSize;
+        USB_DESCRIPTOR_REQUEST* request = null;
+        USB_CONFIGURATION_DESCRIPTOR* descriptor;
+        USB_CONFIGURATION_DESCRIPTOR? config;
+        IntPtr intPtr;
+        try
+        {
+            request = (USB_DESCRIPTOR_REQUEST*)Marshal.AllocHGlobal(bufferSize);
+
+            (config, intPtr) = GetRequestData<USB_CONFIGURATION_DESCRIPTOR>(request);
+            descriptor = (USB_CONFIGURATION_DESCRIPTOR*)intPtr;
+
+            /* This function does two queries for the descriptor:
+             *   * 1st time to obtain the configuration descriptor itself
+             *   * 2nd time to obtain the configuration descriptor and all interface and
+             *     endpoint descriptors
+             */
+            Unsafe.InitBlock(request, 0, nBytes);
+            request->ConnectionIndex = port;
+            request->SetupPacket.bmRequest = 0x80; /* Device to Host */
+            request->SetupPacket.bRequest = 0x06; /* GET DESCRIPTOR */
+            request->SetupPacket.wValue = (ushort)((USB_CONFIGURATION_DESCRIPTOR_TYPE << 8) | index);
+            request->SetupPacket.wIndex = 0; /* Language ID for String Descriptors */
+            request->SetupPacket.wLength = (ushort)(nBytes - Marshal.SizeOf<USB_DESCRIPTOR_REQUEST>());
+
+            if (!SafeMethods.DeviceIoControl(
+                    hub,
+                    IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION,
+                    request,
+                    nBytes,
+                    request,
+                    nBytes,
+                    out nBytesReturned,
+                    null))
+            {
+                Console.WriteLine($"Failed to get descriptor {Marshal.GetLastWin32Error()}");
+                return null;
+            }
+
+            if (nBytes != nBytesReturned)
+            {
+                Console.WriteLine($"Get Descriptor IOCTL returned {nBytesReturned} bytes (requested {nBytes})");
+                return null;
+            }
+
+            if (descriptor->wTotalLength < Marshal.SizeOf<USB_CONFIGURATION_DESCRIPTOR>())
+            {
+                Console.WriteLine(
+                    $"Configuration descriptor is too small ({descriptor->wTotalLength}) to hold the common data");
+                return null;
+            }
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(new IntPtr(request));
+        }
+
+        /* Allocate the buffer and request complete descriptor */
+        nBytes = (uint)(Marshal.SizeOf<USB_DESCRIPTOR_REQUEST>() + descriptor->wTotalLength);
+        request = (USB_DESCRIPTOR_REQUEST*)Marshal.AllocHGlobal((int)nBytes).ToPointer();
+        if (new IntPtr(request) == new IntPtr(null))
+        {
+            return null;
+        }
+
+        (config, intPtr) = GetRequestData<USB_CONFIGURATION_DESCRIPTOR>(request);
+        descriptor = (USB_CONFIGURATION_DESCRIPTOR*)intPtr;
+
+        request->ConnectionIndex = port;
+        request->SetupPacket.bmRequest = 0x80; /* Device to Host */
+        request->SetupPacket.bRequest = 0x06; /* GET DESCRIPTOR */
+        request->SetupPacket.wValue = (ushort)((USB_CONFIGURATION_DESCRIPTOR_TYPE << 8) | index);
+        request->SetupPacket.wIndex = 0; /* Language ID for String Descriptors */
+        request->SetupPacket.wLength = (ushort)(nBytes - sizeof(USB_DESCRIPTOR_REQUEST));
+
+        if (!SafeMethods.DeviceIoControl(
+                hub,
+                IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION,
+                request,
+                nBytes,
+                request,
+                nBytes,
+                out nBytesReturned,
+                null))
+        {
+            Console.WriteLine($"Failed to get descriptor {Marshal.GetLastWin32Error():x8}");
+            Marshal.FreeHGlobal(new IntPtr(request));
+            return null;
+        }
+        if (nBytes != nBytesReturned)
+        {
+            Console.WriteLine($"Get Descriptor IOCTL returned {nBytesReturned} bytes (requested {nBytes})");
+            Marshal.FreeHGlobal(new IntPtr(request));
+            return null;
+        }
+
+        if (descriptor->wTotalLength < Marshal.SizeOf<USB_CONFIGURATION_DESCRIPTOR>())
+        {
+            Console.WriteLine(
+                $"wTotalLength changed between calls");
+            Marshal.FreeHGlobal(new IntPtr(request));
+            return null;
+        }
+
+        return request;
+    }
+
+    const int IOCTL_USB_GET_DESCRIPTOR_FROM_NODE_CONNECTION = 0x220410;
+
+    private static unsafe (T, IntPtr) GetRequestData<T>(USB_DESCRIPTOR_REQUEST* request)
+        where T : unmanaged
+
+    {
+        // increment the pointer by the size of the structure.
+        var resultPtr = new IntPtr(request + Marshal.SizeOf<T>());
+
+        // the data is "off the end of" the structure
+        return (Marshal.PtrToStructure<T>(resultPtr)!, resultPtr);
+    }
+
+    private static unsafe (T, IntPtr) GetRequestData<T>(USB_DESCRIPTOR_REQUEST request) where T: unmanaged
+    {
+        // get pointer to request
+        var requestPtr = &request;
+
+        return GetRequestData<T>(requestPtr);
+    }
+
+    private unsafe void write_device_descriptor_complete(
+        port_descriptor_callback_context* ctx,
+        ushort deviceAddress,
+        USB_DEVICE_DESCRIPTOR* descriptor)
+    {
+        var data_len = Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>() + 18;
+        var data = (USBPCAP_BUFFER_CONTROL_HEADER*)Marshal.AllocHGlobal(data_len);
+
+        var hdr = *data;
+
+        // This is NOT a `USBPCAP_BUFFER_CONTROL_HEADER`
+        var payload = (data + sizeof(USBPCAP_BUFFER_CONTROL_HEADER));
+
+        initialize_control_header(
+            &hdr,
+            ctx->roothub,
+            deviceAddress,
+            18,
+            USBPCAP_CONTROL_STAGE_SETUP,
+            URB_FUNCTION.URB_FUNCTION_CONTROL_TRANSFER,
+            true,
+            false);
+
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bLength); // payload[0]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bDescriptorType); // payload[1]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)(descriptor->bcdUSB & 0x00FF)); // payload[2]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)((descriptor->bcdUSB & 0xFF00) >> 8)); // payload[3]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bDeviceClass); // payload[4]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bDeviceSubClass); // payload[5]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bDeviceProtocol); // payload[6]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bMaxPacketSize0); // payload[7]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)(descriptor->idVendor & 0x00FF)); // payload[8]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)((descriptor->idVendor & 0xFF00) >> 8)); // payload[9]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)(descriptor->idProduct & 0x00FF)); // payload[10]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)((descriptor->idProduct & 0xFF00) >> 8)); // payload[11]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)((descriptor->bcdDevice & 0x00FF))); // payload[12]
+        Marshal.WriteByte(new IntPtr(payload++), (byte)((descriptor->bcdDevice & 0xFF00) >> 8)); // payload[13]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->iManufacturer); // payload[14]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->iProduct); // payload[15]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->iSerialNumber); // payload[16]
+        Marshal.WriteByte(new IntPtr(payload++), descriptor->bNumConfigurations); // payload[17]
+
+        add_to_list(ctx, data, data_len);
+    }
+
+    public const int USBPCAP_CONTROL_STAGE_SETUP = 0;
+    public const int USBPCAP_CONTROL_STAGE_DATA = 1;
+    public const int USBPCAP_CONTROL_STAGE_STATUS = 2;
+    public const int USBPCAP_CONTROL_STAGE_COMPLETE = 3;
+
+    private unsafe void write_complete_packet(
+        port_descriptor_callback_context* ctx,
+        URB_FUNCTION function,
+        ushort deviceAddress,
+        void* payload,
+        uint payload_length,
+        bool @out)
+    {
+        var data_len = (int)(Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>() + payload_length);
+        var data = (USBPCAP_BUFFER_CONTROL_HEADER*)Marshal.AllocHGlobal((int)data_len);
+
+
+        initialize_control_header(data, ctx->roothub, deviceAddress, payload_length, USBPCAP_CONTROL_STAGE_COMPLETE, function, true, @out  );
+
+        if (payload_length > 0)
+        {
+            Unsafe.CopyBlock(&data + sizeof(USBPCAP_BUFFER_CONTROL_HEADER), payload, payload_length);
+        }
+
+        add_to_list(ctx, data, data_len);
+    }
+
+
+    private unsafe void write_setup_packet(
+        port_descriptor_callback_context* ctx,
+        URB_FUNCTION function,
+        ushort deviceAddress,
+        byte bmRequestType,
+        byte bRequest,
+        ushort wValue,
+        int wIndex,
+        int wLength,
+        bool @out)
+    {
+        var data_len = Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>() + 8;
+        var data = (USBPCAP_BUFFER_CONTROL_HEADER*)Marshal.AllocHGlobal(data_len);
+
+        var hdr = *data;
+
+        var setup = (data) + sizeof(USBPCAP_BUFFER_CONTROL_HEADER);
+
+        initialize_control_header(
+            &hdr,
+            ctx->roothub,
+            deviceAddress,
+            8,
+            USBPCAP_CONTROL_STAGE_SETUP,
+            function,
+            false,
+            @out);
+
+        Marshal.WriteByte(new IntPtr(setup++), bmRequestType); // setup[0]
+        Marshal.WriteByte(new IntPtr(setup++), bRequest); // setup[1]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)(wValue & 0x00FF)); // setup[2]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)((wValue & 0xFF00) >> 8)); // setup[3]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)(wIndex & 0x00FF)); // setup[4]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)((wIndex & 0xFF00) >> 8)); // setup[5]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)(wLength & 0x00FF)); // setup[6]
+        Marshal.WriteByte(new IntPtr(setup++), (byte)((wLength & 0xFF00) >> 8)); // setup[7]
+
+        add_to_list(ctx, data, data_len);
+    }
+
+    private unsafe void initialize_control_header(
+        USBPCAP_BUFFER_CONTROL_HEADER* hdr,
+        ushort bus,
+        ushort deviceAddress,
+        uint dataLength,
+        byte stage,
+        URB_FUNCTION function,
+        bool fromPdo,
+        bool @out)
+    {
+        hdr->header.headerLen = Convert.ToUInt16(Marshal.SizeOf<USBPCAP_BUFFER_CONTROL_HEADER>());
+        hdr->header.irpId = 0;
+        hdr->header.status = 0; /* USBD_STATUS_SUCCESS */
+        hdr->header.function = function;
+        hdr->header.info = (byte)(fromPdo ? 0x001 : 0x000b);
+        hdr->header.bus = bus;
+        hdr->header.device = deviceAddress;
+        hdr->header.endpoint = (byte)(@out ? 0x00 : 0x80);
+        hdr->header.transfer = USBPCAP_TRANSFER_TYPE.CONTROL;
+        hdr->header.dataLength = dataLength;
+        hdr->stage = stage;
+    }
+
+
+    private unsafe void add_to_list(
+        port_descriptor_callback_context* ctx,
+        USBPCAP_BUFFER_CONTROL_HEADER* data,
+        int length)
+    {
+        var new_tail = (list_entry*)Marshal.AllocHGlobal(sizeof(list_entry));
+        new_tail->data = new IntPtr(data);
+        new_tail->length = length;
+        new_tail->next = null;
+
+        if (ctx->tail != null)
+        {
+            ctx->tail->next = new_tail;
+            ctx->tail = new_tail;
+        }
+        else
+        {
+            int x = 0;
+            int y = x = 10;
+            ctx->head = new_tail;
+            // ctx->head = ctx->tail; // = new_tail;
+            ctx->tail = new_tail;
+        }
+    }
+
+    private bool USBPcapIsDeviceFiltered(USBPCAP_ADDRESS_FILTER filter, ushort address)
+    {
+        unsafe
+        {
+            if (filter.filterAll)
+            {
+                return true;
+            }
+
+            if (this.USBPcapGetAddressRangeAndIndex(address, out var range, out var index) == false)
+            {
+                return false;
+            }
+
+            filter.addresses[range] |= (1u << index);
+            return true;
+        }
+    }
+
+    //
+    // public const byte URB_GET_DESCRIPTOR_FROM_DEVICE = 0x000b;
+    // public const byte URB_SELECT_CONFIGURATION = 0x0000;
+    // public const byte URB_CONTROL_TRANSFER = 0x0008;
+    public const byte USB_DEVICE_DESCRIPTOR_TYPE = 0x01;
 
     private unsafe void enumerate_all_connected_devices(
         string filter,
-        descriptor_callback callback,
-        descriptor_callback_context* ctx)
-    { }
-
-    private unsafe IntPtr generate_pcap_packets(list_entry* ctxHead, ref int pcapPacketsLength)
+        ConnectedPortCallback callback,
+        port_descriptor_callback_context* ctx)
     {
-        throw new NotImplementedException();
+        var hub = get_usbpcap_filter_hub_symlink(filter);
+        if (hub.Length > 0)
+        {
+            EnumerateHub(hub, null, 0, new StringBuilder(), null, callback, ctx);
+        }
     }
 
+    static byte[] GetBytes<T>(T obj)
+        where T : struct
+    {
+        var size = Marshal.SizeOf(obj);
+        var arr = new byte[size];
+
+        var ptr = IntPtr.Zero;
+        try
+        {
+            ptr = Marshal.AllocHGlobal(size);
+            Marshal.StructureToPtr(obj, ptr, true);
+            Marshal.Copy(ptr, arr, 0, size);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(ptr);
+        }
+
+        return arr;
+    }
+
+    private unsafe IntPtr generate_pcap_packets(list_entry* ctxHead, int* out_len)
+    {
+        var totalLength = 0;
+        list_entry* e;
+
+        // UINT8
+
+        for (e = ctxHead; new IntPtr(e) != IntPtr.Zero; e = e->next)
+        {
+            totalLength += Marshal.SizeOf<pcaprec_hdr_t>();
+            totalLength += e->length;
+        }
+
+        *out_len = totalLength;
+        var pcap = Marshal.AllocHGlobal(totalLength);
+        var offset = 0;
+
+        for (e = ctxHead; new IntPtr(e) != IntPtr.Zero; e = e->next)
+        {
+            var timestamp = new ULARGE_INTEGER();
+            var data_len = Marshal.SizeOf<pcaprec_hdr_t>();
+            var hdr = (pcaprec_hdr_t*)Marshal.AllocHGlobal(data_len).ToPointer();
+
+            SafeMethods.GetSystemTimeAsFileTime(out var ts);
+
+            timestamp.LowPartAsInt = ts.dwLowDateTime;
+            timestamp.HighPartAsInt = ts.dwHighDateTime;
+
+            hdr->ts_sec = (uint)(timestamp.QuadPart / 10000000 - 11644473600);
+            hdr->ts_usec = (uint)((timestamp.QuadPart % 10000000) / 10);
+            hdr->incl_len = (uint)e->length;
+            hdr->orig_len = (uint)e->length;
+
+            Unsafe.CopyBlock((void*)(pcap + offset),hdr,  (uint)Marshal.SizeOf<pcaprec_hdr_t>());
+            //Marshal.Copy(GetBytes(hdr), 0, (&pcap)[offset], Marshal.SizeOf<pcaprec_hdr_t>());
+            offset += Marshal.SizeOf<pcaprec_hdr_t>();
+
+            Unsafe.CopyBlock((void*)(pcap + offset), (void*)e->data, (uint)e->length);
+            //Marshal.Copy(GetBytes(e->data), 0, (&pcap)[offset], e->length);
+            offset += e->length;
+        }
+
+        return pcap;
+    }
 
     private void read_thread(object obj)
     {
@@ -221,34 +742,30 @@ public class USBPcapClient : IDisposable
 
     private unsafe void process_data(ThreadData data, byte[] buffer, uint read)
     {
-        using (var input = new MemoryStream(buffer, 0, (int)read))
+        using var input = new MemoryStream(buffer, 0, (int)read);
+        using var br = new BinaryReader(input);
+        if (!data.pcapHeaderReadEver)
         {
-            using (var br = new BinaryReader(input))
-            {
-                if (!data.pcapHeaderReadEver)
-                {
-                    pcap_hdr_t pcapHdrT;
-                    br.TryRead(out pcapHdrT);
-                    this.OnHeaderRead(pcapHdrT);
-                    data.pcapHeaderReadEver = true;
-                }
+            pcap_hdr_t pcapHdrT;
+            br.TryRead(out pcapHdrT);
+            this.OnHeaderRead(pcapHdrT);
+            data.pcapHeaderReadEver = true;
+        }
 
-                pcaprec_hdr_t pcaprecHdrT;
-                UsbpcapBufferPacketHeader packet;
-                while (br.TryRead(out pcaprecHdrT) && br.TryRead(out packet))
-                {
-                    var num = sizeof(UsbpcapBufferPacketHeader);
-                    var count = (int)pcaprecHdrT.incl_len - num;
-                    var data1 = br.ReadBytes(count);
-                    this.OnDataRead(pcaprecHdrT, packet, data1);
-                }
-            }
+        pcaprec_hdr_t pcaprecHdrT;
+        UsbpcapBufferPacketHeader packet;
+        while (br.TryRead(out pcaprecHdrT) && br.TryRead(out packet))
+        {
+            var num = sizeof(UsbpcapBufferPacketHeader);
+            var count = (int)pcaprecHdrT.incl_len - num;
+            var data1 = br.ReadBytes(count);
+            this.OnDataRead(pcaprecHdrT, packet, data1);
         }
     }
 
     public void wait_for_exit_signal()
     {
-        this._data.exit_event?.WaitOne();
+        this.data.exit_event?.WaitOne();
     }
 
     public unsafe IntPtr create_filter_read_handle(ThreadData data)
@@ -268,7 +785,7 @@ public class USBPcapClient : IDisposable
             return IntPtr.Zero;
         }
 
-        var safeFilterHandle = new SafeFileHandle(filter_handle, true);
+        var safeFilterHandle = new SafeFileHandle(filter_handle, false);
 
         var success = false;
 
@@ -284,15 +801,15 @@ public class USBPcapClient : IDisposable
             success = SafeMethods.DeviceIoControl(
                 safeFilterHandle,
                 SafeMethods.IOCTL_USBPCAP_SET_SNAPLEN_SIZE,
-                (IntPtr)pBuf,
+                pBuf,
                 inBufSize,
-                IntPtr.Zero,
+                IntPtr.Zero.ToPointer(),
                 0,
                 out var bytes_ret,
-                ref nativeOverlapped);
+                &nativeOverlapped);
             if (success == false)
             {
-                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret}) {Marshal.GetLastWin32Error():x8}");
                 return IntPtr.Zero;
             }
 
@@ -301,15 +818,15 @@ public class USBPcapClient : IDisposable
             success = SafeMethods.DeviceIoControl(
                 safeFilterHandle,
                 SafeMethods.IOCTL_USBPCAP_SETUP_BUFFER,
-                (IntPtr)pBuf,
+                pBuf,
                 inBufSize,
-                IntPtr.Zero,
+                IntPtr.Zero.ToPointer(),
                 0,
                 out bytes_ret,
-                ref nativeOverlapped);
+                &nativeOverlapped);
             if (success == false)
             {
-                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret}) {Marshal.GetLastWin32Error():x8}");
                 return IntPtr.Zero;
             }
 
@@ -317,20 +834,19 @@ public class USBPcapClient : IDisposable
             inBufSize = (uint)sizeof(USBPCAP_ADDRESS_FILTER);
             success = SafeMethods.DeviceIoControl(
                 safeFilterHandle,
-                SafeMethods.IOCTL_USBPCAP_START_FILTERING,
-                (IntPtr)(&data.filter),
+                SafeMethods.IOCTL_USBPCAP_START_FILTERING, &data.filter,
                 inBufSize,
-                IntPtr.Zero,
+                IntPtr.Zero.ToPointer(),
                 0,
                 out bytes_ret,
-                ref nativeOverlapped);
+                &nativeOverlapped);
 
 
             if (success == false)
             {
-                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret})");
+                Console.WriteLine($"DeviceIoControl failed (supplimentary code {bytes_ret}) {Marshal.GetLastWin32Error():x8}");
                 return IntPtr.Zero;
-            }
+                         }
 
             return filter_handle;
         }
@@ -377,7 +893,7 @@ public class USBPcapClient : IDisposable
         return true;
     }
 
-    public static string enumerate_print_usbpcap_interactive(string filter, bool consoleOutput = false)
+    public static unsafe string enumerate_print_usbpcap_interactive(string filter, bool consoleOutput = false)
     {
         var output = new StringBuilder();
         var filterHubSymlink = get_usbpcap_filter_hub_symlink(filter);
@@ -388,7 +904,22 @@ public class USBPcapClient : IDisposable
 
         output.Append("  ");
         output.AppendLine(filterHubSymlink);
-        EnumerateHub(filterHubSymlink, new USB_NODE_CONNECTION_INFORMATION?(), 0U, output);
+        EnumerateHub(
+            filterHubSymlink,
+            new USB_NODE_CONNECTION_INFORMATION?(),
+            0U,
+            output,
+            (level, port, display, address, parentAddress, node, parentNode) => print_usbpcapcmd(
+                level,
+                port,
+                display,
+                address,
+                parentAddress,
+                node,
+                parentNode,
+                output),
+            null,
+            null);
         if (consoleOutput)
         {
             Console.WriteLine(output.ToString());
@@ -401,7 +932,10 @@ public class USBPcapClient : IDisposable
         string hub,
         USB_NODE_CONNECTION_INFORMATION? connection_info,
         uint level,
-        StringBuilder output)
+        StringBuilder output,
+        DeviceInfoCallback? print_callback = null,
+        ConnectedPortCallback? port_callback = null,
+        port_descriptor_callback_context* port_ctx = null)
     {
         var deviceName = string.Empty;
 
@@ -426,7 +960,7 @@ public class USBPcapClient : IDisposable
             FileMode.Open,
             FileAttributes.Normal,
             IntPtr.Zero);
-        var safeFileHandle = new SafeFileHandle(hHubDevice, true);
+        var safeFileHandle = new SafeFileHandle(hHubDevice, false);
 
         if (hHubDevice == SafeMethods.INVALID_HANDLE_VALUE)
         {
@@ -450,25 +984,32 @@ public class USBPcapClient : IDisposable
             var success = SafeMethods.DeviceIoControl(
                 safeFileHandle,
                 SafeMethods.IOCTL_USB_GET_NODE_INFORMATION,
-                pHubInfo,
+                pHubInfo.ToPointer(),
                 (uint)hubInfoSize,
-                pHubInfo,
+                pHubInfo.ToPointer(),
                 (uint)hubInfoSize,
                 out var nBytes,
-                ref overlap);
+                &overlap);
             if (success == false)
             {
+                Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
                 return;
             }
 
             var hubInfo = Marshal.PtrToStructure<USB_NODE_INFORMATION>(pHubInfo);
 
-            EnumerateHubPorts(
-                safeFileHandle,
-                hubInfo.HubInformation.HubDescriptor.bNumberOfPorts,
-                level,
-                connection_info.HasValue == false ? (ushort)0 : connection_info.Value.DeviceAddress,
-                output);
+            if (port_ctx != null)
+            {
+                EnumerateHubPorts(
+                    safeFileHandle,
+                    hubInfo.HubInformation.HubDescriptor.bNumberOfPorts,
+                    level,
+                    connection_info.HasValue == false ? (ushort)0 : connection_info.Value.DeviceAddress,
+                    output,
+                    print_callback,
+                    port_callback,
+                    port_ctx);
+            }
         }
         finally
         {
@@ -486,14 +1027,17 @@ public class USBPcapClient : IDisposable
         byte NumPorts,
         uint level,
         ushort hubAddress,
-        StringBuilder output)
+        StringBuilder output,
+        DeviceInfoCallback? print_callback = null,
+        ConnectedPortCallback? port_callback = null,
+        port_descriptor_callback_context* ctx = null)
     {
         for (uint index = 1; index <= NumPorts; ++index)
         {
             var inBufferSize = (uint)sizeof(USB_NODE_CONNECTION_INFORMATION);
             USB_NODE_CONNECTION_INFORMATION connectionInformation;
             connectionInformation.ConnectionIndex = index;
-            var buffer = new IntPtr(&connectionInformation);
+            var buffer = &connectionInformation;
             var overlap = new NativeOverlapped();
             if (SafeMethods.DeviceIoControl(
                     hHubDevice,
@@ -503,7 +1047,7 @@ public class USBPcapClient : IDisposable
                     buffer,
                     inBufferSize,
                     out _,
-                    ref overlap) && connectionInformation.ConnectionStatus != USB_CONNECTION_STATUS.NoDeviceConnected)
+                    &overlap) && connectionInformation.ConnectionStatus != USB_CONNECTION_STATUS.NoDeviceConnected)
             {
                 var driverKeyName = GetDriverKeyName(hHubDevice, index);
                 if (!string.IsNullOrEmpty(driverKeyName))
@@ -515,10 +1059,27 @@ public class USBPcapClient : IDisposable
                         !connectionInformation.DeviceIsHub,
                         connectionInformation.DeviceAddress,
                         hubAddress,
-                        output);
+                        output,
+                        print_callback);
+                }
+                else
+                {
+                    Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
                 }
 
                 var connectionStatus = (int)connectionInformation.ConnectionStatus;
+
+                if (connectionInformation.ConnectionStatus == USB_CONNECTION_STATUS.DeviceConnected
+                 && port_callback != null && ctx != null)
+                {
+                    port_callback(
+                        hHubDevice,
+                        index,
+                        connectionInformation.DeviceAddress,
+                        connectionInformation.DeviceDescriptor,
+                        ctx);
+                }
+
                 if (connectionInformation.DeviceIsHub)
                 {
                     var externalHubName = GetExternalHubName(hHubDevice, index);
@@ -542,20 +1103,20 @@ public class USBPcapClient : IDisposable
         extHubName.ConnectionIndex = ConnectionIndex;
 
         var pInfo = &extHubName;
-        var ptrBuf = new IntPtr(pInfo);
 
         var overlap = new NativeOverlapped();
         var success = SafeMethods.DeviceIoControl(
             Hub,
             SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_NAME,
-            ptrBuf,
+            pInfo,
             nameSize,
-            ptrBuf,
+            pInfo,
             nameSize,
             out nBytes,
-            ref overlap);
+            &overlap);
         if (success == false)
         {
+            Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
             return string.Empty;
         }
 
@@ -578,15 +1139,16 @@ public class USBPcapClient : IDisposable
             success = SafeMethods.DeviceIoControl(
                 Hub,
                 SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_NAME,
-                extHubNameW,
+                extHubNameW.ToPointer(),
                 nBytes,
-                extHubNameW,
+                extHubNameW.ToPointer(),
                 nBytes,
                 out nBytes,
-                ref overlap);
+                &overlap);
 
             if (!success)
             {
+                Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
                 return string.Empty;
             }
 
@@ -601,13 +1163,13 @@ public class USBPcapClient : IDisposable
     }
 
     private static void print_usbpcapcmd(
-        uint level,
-        uint port,
+        ulong level,
+        ulong port,
         string display,
         ushort deviceAddress,
         ushort parentAddress,
-        uint node,
-        uint parentNode,
+        ulong node,
+        ulong parentNode,
         StringBuilder output)
     {
         print_indent(level + 2U, output);
@@ -619,7 +1181,7 @@ public class USBPcapClient : IDisposable
         output.AppendLine(display ?? "");
     }
 
-    private static void print_indent(uint level, StringBuilder output)
+    private static void print_indent(ulong level, StringBuilder output)
     {
         if (level > 20U)
         {
@@ -641,7 +1203,8 @@ public class USBPcapClient : IDisposable
         bool printAllChildren,
         ushort deviceAddress,
         ushort parentAddress,
-        StringBuilder output)
+        StringBuilder output,
+        DeviceInfoCallback? callback = null)
     {
         uint devInst = 0;
         uint devInstNext = 0;
@@ -676,6 +1239,7 @@ public class USBPcapClient : IDisposable
                     gcHandle.AddrOfPinnedObject(),
                     ref len,
                     0);
+
                 if (cr == CONFIGRET.CR_SUCCESS)
                 {
                     var devNodeName = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
@@ -694,11 +1258,16 @@ public class USBPcapClient : IDisposable
                         {
                             var deviceDesc = Marshal.PtrToStringAnsi(gcHandle.AddrOfPinnedObject())!;
 
+                            if (callback != null)
+                            {
+                                callback(Level, index, deviceDesc, deviceAddress, parentAddress, 0, 0);
+                            }
+
                             print_usbpcapcmd(Level, index, deviceDesc, deviceAddress, parentAddress, 0, 0, output);
 
                             if (printAllChildren)
                             {
-                                PrintDevinstChildren(devInst, Level, deviceAddress, output);
+                                PrintDevinstChildren(devInst, Level, deviceAddress, output, callback);
                             }
                         }
                     }
@@ -767,7 +1336,12 @@ public class USBPcapClient : IDisposable
         }
     }
 
-    private static void PrintDevinstChildren(uint parent, uint indent, ushort deviceAddress, StringBuilder output)
+    private static void PrintDevinstChildren(
+        uint parent,
+        uint indent,
+        ushort deviceAddress,
+        StringBuilder output,
+        DeviceInfoCallback? callback = null)
     {
         uint next = 0;
         var current = parent;
@@ -831,7 +1405,22 @@ public class USBPcapClient : IDisposable
                         }
                     }
 
-                    print_usbpcapcmd(level, 0, deviceDesc, deviceAddress, deviceAddress, nextNode, parentNode, output);
+                    if (callback != null)
+                    {
+                        callback(level, 0, deviceDesc, deviceAddress, deviceAddress, nextNode, parentNode);
+                    }
+                    else
+                    {
+                        print_usbpcapcmd(
+                            level,
+                            0,
+                            deviceDesc,
+                            deviceAddress,
+                            deviceAddress,
+                            nextNode,
+                            parentNode,
+                            output);
+                    }
                 }
 
                 // Go down a level to the first next.
@@ -902,7 +1491,7 @@ public class USBPcapClient : IDisposable
         var num1 = (uint)sizeof(USB_NODE_CONNECTION_DRIVERKEY_NAME);
         USB_NODE_CONNECTION_DRIVERKEY_NAME connectionDriverkeyName;
         connectionDriverkeyName.ConnectionIndex = index;
-        var num2 = new IntPtr(&connectionDriverkeyName);
+        var num2 = &connectionDriverkeyName;
         uint lpBytesReturned;
         var overlap = new NativeOverlapped();
         if (!SafeMethods.DeviceIoControl(
@@ -913,8 +1502,9 @@ public class USBPcapClient : IDisposable
                 num2,
                 num1,
                 out lpBytesReturned,
-                ref overlap))
+                &overlap))
         {
+            Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
             return string.Empty;
         }
 
@@ -932,13 +1522,14 @@ public class USBPcapClient : IDisposable
             if (!SafeMethods.DeviceIoControl(
                     hHubDevice,
                     SafeMethods.IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME,
-                    num3,
+                    num3.ToPointer(),
                     actualLength,
-                    num3,
+                    num3.ToPointer(),
                     actualLength,
                     out lpBytesReturned,
-                    ref overlap))
+                    &overlap))
             {
+                Console.WriteLine($"Win32 Error: {Marshal.GetLastWin32Error():x8}");
                 return string.Empty;
             }
 
@@ -951,7 +1542,7 @@ public class USBPcapClient : IDisposable
         }
     }
 
-    private static string? get_usbpcap_filter_hub_symlink(string filter)
+    private static unsafe string get_usbpcap_filter_hub_symlink(string filter)
     {
         var file = SafeMethods.CreateFile(
             filter,
@@ -962,7 +1553,7 @@ public class USBPcapClient : IDisposable
             FileAttributes.None,
             IntPtr.Zero);
 
-        var safeFile = new SafeFileHandle(file, true);
+        var safeFile = new SafeFileHandle(file, false);
 
         if (file == SafeMethods.INVALID_HANDLE_VALUE)
         {
@@ -980,14 +1571,14 @@ public class USBPcapClient : IDisposable
                 return !SafeMethods.DeviceIoControl(
                     safeFile,
                     SafeMethods.IOCTL_USBPCAP_GET_HUB_SYMLINK,
-                    IntPtr.Zero,
+                    IntPtr.Zero.ToPointer(),
                     0U,
-                    gcHandle.AddrOfPinnedObject(),
+                    gcHandle.AddrOfPinnedObject().ToPointer(),
                     (uint)numArray.Length,
                     out var _,
-                    ref overlap)
+                    &overlap)
                     ? string.Empty
-                    : Marshal.PtrToStringUni(gcHandle.AddrOfPinnedObject());
+                    : Marshal.PtrToStringUni(gcHandle.AddrOfPinnedObject())!;
             }
             finally
             {
@@ -1002,31 +1593,21 @@ public class USBPcapClient : IDisposable
 
     public static bool is_usbpcap_upper_filter_installed()
     {
-        using (var registryKey = Registry.LocalMachine.OpenSubKey(
-                   "System\\CurrentControlSet\\Control\\Class\\{36FC9E60-C465-11CF-8056-444553540000}"))
+        using var registryKey = LocalMachine.OpenSubKey(
+            "System\\CurrentControlSet\\Control\\Class\\{36FC9E60-C465-11CF-8056-444553540000}");
+        if (registryKey == null)
         {
-            if (registryKey == null)
-            {
-                Console.WriteLine("Failed to open USB Class registry key!");
-                return false;
-            }
-
-            if (!(registryKey.GetValue("UpperFilters", null) is string[] strArray))
-            {
-                Console.WriteLine("Failed to query UpperFilters value size!");
-                return false;
-            }
-
-            for (var index = 0; index < strArray.Length; ++index)
-            {
-                if (strArray[index] == "USBPcap")
-                {
-                    return true;
-                }
-            }
+            Console.WriteLine("Failed to open USB Class registry key!");
+            return false;
         }
 
-        return false;
+        if (!(registryKey.GetValue("UpperFilters", null) is string[] strArray))
+        {
+            Console.WriteLine("Failed to query UpperFilters value size!");
+            return false;
+        }
+
+        return strArray.Any(t => t == "USBPcap");
     }
 
     public static List<string> find_usbpcap_filters()
@@ -1128,7 +1709,7 @@ public class USBPcapClient : IDisposable
             devInfo.cbSize = (uint)sizeof(SP_DEVINFO_DATA);
             for (devIndex = 0; SafeMethods.SetupDiEnumDeviceInfo(devs, devIndex, ref devInfo); devIndex++)
             {
-                callback(new SafeFileHandle((IntPtr)devs, true), devInfo, devInfoListDetail);
+                callback(new SafeFileHandle((IntPtr)devs, false), devInfo, devInfoListDetail);
             }
         }
         finally
@@ -1151,8 +1732,8 @@ public class USBPcapClient : IDisposable
         //var handle = GCHandle.Alloc(devID);
         try
         {
-
-            if (SafeMethods.CM_Get_Device_ID_Ex((IntPtr)(&devInfo.DevInst),
+            if (SafeMethods.CM_Get_Device_ID_Ex(
+                    (IntPtr)(&devInfo.DevInst),
                     ref devID,
                     MAX_DEVICE_ID_LEN,
                     0,
@@ -1174,8 +1755,12 @@ public class USBPcapClient : IDisposable
         pcp.Scope = DICS_FLAG_CONFIGSPECIFIC;
         pcp.HwProfile = 0;
 
-        if (!SafeMethods.SetupDiSetClassInstallParams(devs, devInfo, pcp.ClassInstallHeader, (uint)sizeof(SP_PROPCHANGE_PARAMS)) ||
-            !SafeMethods.SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, devs, devInfo))
+        if (!SafeMethods.SetupDiSetClassInstallParams(
+                devs,
+                devInfo,
+                pcp.ClassInstallHeader,
+                (uint)sizeof(SP_PROPCHANGE_PARAMS))
+         || !SafeMethods.SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, devs, devInfo))
         {
             Console.WriteLine("Failed to invoke DIF_PROPERTYCHANGE! Please reboot.\n");
         }
@@ -1183,8 +1768,8 @@ public class USBPcapClient : IDisposable
         {
             devParams.cbSize = GetSizeOf(devParams);
 
-            if (SafeMethods.SetupDiGetDeviceInstallParams(devs,devInfo, ref devParams) &&
-                (devParams.Flags & (int)( SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDRESTART | SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDREBOOT)) != 0)
+            if (SafeMethods.SetupDiGetDeviceInstallParams(devs, devInfo, ref devParams) && (devParams.Flags
+                  & (int)(SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDRESTART | SP_DEVINSTALL_PARAMS_FLAGS.DI_NEEDREBOOT)) != 0)
             {
                 Console.WriteLine("Reboot required.\n");
             }
@@ -1195,7 +1780,8 @@ public class USBPcapClient : IDisposable
         }
     }
 
-    public static unsafe int GetSizeOf<T>(T obj) where T: unmanaged
+    public static unsafe int GetSizeOf<T>(T obj)
+        where T : unmanaged
     {
         return sizeof(T);
     }
