@@ -41,11 +41,6 @@ client.DataRead += (sender, eventArgs) =>
             $"DATA READ Device:'{eventArgs.Header.device}' in?:{eventArgs.Header.In} func:'{eventArgs.Header.function}' len: {eventArgs.Data.Length} data:{eventArgs.Data.ToHexString()}");
     }
 
-    if (eventArgs.Data.Length > Marshal.SizeOf<>())
-    {
-
-    }
-
     if (eventArgs.Header.In && eventArgs.Data.Length > 0 && Utils.ContainsTargetBytes(
             eventArgs.Data,
             new byte[] { 0x02, 0x01, 0x00, 0x00 }))

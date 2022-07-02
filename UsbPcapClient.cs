@@ -457,7 +457,7 @@ public class USBPcapClient : IDisposable
 
         if (payload_length > 0)
         {
-            Buffer.MemoryCopy(payload, &data[sizeof(USBPCAP_BUFFER_CONTROL_HEADER)], data_len, payload_length);
+            Unsafe.CopyBlock(&data + sizeof(USBPCAP_BUFFER_CONTROL_HEADER), payload, payload_length);
         }
 
         add_to_list(ctx, data, data_len);
@@ -641,11 +641,11 @@ public class USBPcapClient : IDisposable
             hdr->incl_len = (uint)e->length;
             hdr->orig_len = (uint)e->length;
 
-            Buffer.MemoryCopy(hdr, (void*)(pcap + offset), totalLength - offset, Marshal.SizeOf<pcaprec_hdr_t>());
+            Unsafe.CopyBlock((void*)(pcap + offset),hdr,  (uint)Marshal.SizeOf<pcaprec_hdr_t>());
             //Marshal.Copy(GetBytes(hdr), 0, (&pcap)[offset], Marshal.SizeOf<pcaprec_hdr_t>());
             offset += Marshal.SizeOf<pcaprec_hdr_t>();
 
-            Buffer.MemoryCopy((void*)e->data, (void*)(pcap + offset), totalLength - offset, e->length);
+            Unsafe.CopyBlock((void*)(pcap + offset), (void*)e->data, (uint)e->length);
             //Marshal.Copy(GetBytes(e->data), 0, (&pcap)[offset], e->length);
             offset += e->length;
         }
