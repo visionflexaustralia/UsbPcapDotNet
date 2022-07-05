@@ -11,7 +11,7 @@
         <Authors>Visionflex Australia</Authors>
         <Company>Visionflex Australia</Company>
         <PackageId>UsbPcapDotNet</PackageId>
-        <Version>0.1.6</Version>
+        <Version>0.1.7</Version>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <Description>Updated Version of USBPcapLib with more features</Description>
         <PackageTags>USBPcap wireshark usb sniff capture</PackageTags>
