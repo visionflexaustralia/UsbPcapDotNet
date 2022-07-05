@@ -268,8 +268,6 @@ public class USBPcapClient : IDisposable
             return IntPtr.Zero;
         }
 
-        var safeFilterHandle = new SafeFileHandle(filter_handle, false);
-
         var success = false;
 
         try
@@ -282,7 +280,7 @@ public class USBPcapClient : IDisposable
 
             var nativeOverlapped = new NativeOverlapped();
             success = SafeMethods.DeviceIoControl(
-                safeFilterHandle,
+                filter_handle,
                 SafeMethods.IOCTL_USBPCAP_SET_SNAPLEN_SIZE,
                 (IntPtr)pBuf,
                 inBufSize,
@@ -299,7 +297,7 @@ public class USBPcapClient : IDisposable
             nativeOverlapped = new NativeOverlapped();
             ioctlSize.size = data.bufferlen;
             success = SafeMethods.DeviceIoControl(
-                safeFilterHandle,
+                filter_handle,
                 SafeMethods.IOCTL_USBPCAP_SETUP_BUFFER,
                 (IntPtr)pBuf,
                 inBufSize,
@@ -316,7 +314,7 @@ public class USBPcapClient : IDisposable
             nativeOverlapped = new NativeOverlapped();
             inBufSize = (uint)sizeof(USBPCAP_ADDRESS_FILTER);
             success = SafeMethods.DeviceIoControl(
-                safeFilterHandle,
+                filter_handle,
                 SafeMethods.IOCTL_USBPCAP_START_FILTERING,
                 (IntPtr)(&data.filter),
                 inBufSize,
@@ -426,7 +424,6 @@ public class USBPcapClient : IDisposable
             FileMode.Open,
             FileAttributes.Normal,
             IntPtr.Zero);
-        var safeFileHandle = new SafeFileHandle(hHubDevice, false);
 
         if (hHubDevice == SafeMethods.INVALID_HANDLE_VALUE)
         {
@@ -448,7 +445,7 @@ public class USBPcapClient : IDisposable
 
             var overlap = new NativeOverlapped();
             var success = SafeMethods.DeviceIoControl(
-                safeFileHandle,
+                hHubDevice,
                 SafeMethods.IOCTL_USB_GET_NODE_INFORMATION,
                 pHubInfo,
                 (uint)hubInfoSize,
@@ -465,7 +462,7 @@ public class USBPcapClient : IDisposable
             var hubInfo = Marshal.PtrToStructure<USB_NODE_INFORMATION>(pHubInfo);
 
             EnumerateHubPorts(
-                safeFileHandle,
+                hHubDevice,
                 hubInfo.HubInformation.HubDescriptor.bNumberOfPorts,
                 level,
                 connection_info.HasValue == false ? (ushort)0 : connection_info.Value.DeviceAddress,
@@ -483,7 +480,7 @@ public class USBPcapClient : IDisposable
     }
 
     private static unsafe void EnumerateHubPorts(
-        SafeFileHandle hHubDevice,
+        IntPtr hHubDevice,
         byte NumPorts,
         uint level,
         ushort hubAddress,
@@ -536,7 +533,7 @@ public class USBPcapClient : IDisposable
         }
     }
 
-    private static unsafe string GetExternalHubName(SafeFileHandle Hub, uint ConnectionIndex)
+    private static unsafe string GetExternalHubName(IntPtr Hub, uint ConnectionIndex)
     {
         uint nBytes;
         USB_NODE_CONNECTION_NAME extHubName;
@@ -904,7 +901,7 @@ public class USBPcapClient : IDisposable
         }
     }
 
-    private static unsafe string GetDriverKeyName(SafeFileHandle hHubDevice, uint index)
+    private static unsafe string GetDriverKeyName(IntPtr hHubDevice, uint index)
     {
         var num1 = (uint)sizeof(USB_NODE_CONNECTION_DRIVERKEY_NAME);
         USB_NODE_CONNECTION_DRIVERKEY_NAME connectionDriverkeyName;
@@ -971,8 +968,6 @@ public class USBPcapClient : IDisposable
             FileAttributes.None,
             IntPtr.Zero);
 
-        var safeFile = new SafeFileHandle(file, false);
-
         if (file == SafeMethods.INVALID_HANDLE_VALUE)
         {
             Console.WriteLine("Couldn't open device: " + filter);
@@ -987,7 +982,7 @@ public class USBPcapClient : IDisposable
             {
                 var overlap = new NativeOverlapped();
                 return !SafeMethods.DeviceIoControl(
-                    safeFile,
+                    file,
                     SafeMethods.IOCTL_USBPCAP_GET_HUB_SYMLINK,
                     IntPtr.Zero,
                     0U,

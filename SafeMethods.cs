@@ -100,7 +100,7 @@ internal class SafeMethods
 
     [DllImport("Kernel32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     public static extern unsafe bool DeviceIoControl(
-        SafeFileHandle hDevice,
+        IntPtr hDevice,
         uint IoControlCode,
         IntPtr inBuffer,
         uint nInBufferSize,
